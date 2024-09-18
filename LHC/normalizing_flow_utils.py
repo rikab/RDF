@@ -120,7 +120,7 @@ def initialize_model(num_points, lr):
 
 # ########## Training Loop ##########
 
-def train_model(target_function, loss_function, num_epochs, num_points, batch_size, lr):
+def train_model(target_function, loss_function, num_epochs, num_points, batch_size, lr, mode = "Forward"):
     """ Function to train the normalizing flow model to approximate the target distribution 
 
     Args:
@@ -131,48 +131,67 @@ def train_model(target_function, loss_function, num_epochs, num_points, batch_si
         batch_size (int): Batch size to be used in the training
         lr (float): Learning rate to be used in the training
 
+
     Returns:
         FlowComposable1d: Trained model
         list: List of training losses
     """
+
+    # Check if mode is either Forward or Reverse
+    if mode not in ["Forward", "Reverse"]:
+        raise ValueError("Mode should be either Forward or Reverse")
 
     train_losses = []
     flow, optimizer, prior = initialize_model(num_points, lr)
 
 
     for epoch in tqdm(range(num_epochs)):
+
+
     
     
         optimizer.zero_grad()
+
+        if mode == "Forward":
         
-        # APPLY FLOW TO PRIOR
-        # draw samples from prior
-        z = prior.sample_n(batch_size).to(torch_device) # shape x: (batch_size, num_points)
-        logq = prior.log_prob(z) # shape logq: (batch_size, num_points)
-        x, logJ = flow(z)
-        logJ = logJ.reshape(batch_size, num_points)
+            # APPLY FLOW TO PRIOR
+            # draw samples from prior
+            z = prior.sample_n(batch_size).to(torch_device) # shape x: (batch_size, num_points)
+            logq = prior.log_prob(z) # shape logq: (batch_size, num_points)
+            x, logJ = flow(z)
+            logJ = logJ.reshape(batch_size, num_points)
 
-        x = x.reshape(batch_size, num_points) 
-        mask = 1
-        
-        # need to reshape the outputs match those from the previous step
-        logq = logq - logJ 
+            x = x.reshape(batch_size, num_points) 
+            mask = 1
+            
+            # need to reshape the outputs match those from the previous step
+            logq = logq - logJ 
 
-        # CALCULATE THE TARGET
-        log_target = torch.log(target_function(x))
-        logp = log_target
+            # CALCULATE THE TARGET
+            log_target = torch.log(target_function(x))
+            logp = log_target
 
-        # Mean over the points to get the total logp and logq
-        regulator = 1
-        total_logq = torch.nanmean(mask * logq, dim=1) #/ (mask.sum() + regulator)
-        total_logJ = torch.nanmean(mask * logJ, dim=1) #/ (mask.sum() + regulator)
-        total_logp = torch.nanmean(mask * logp, dim=1) #/ (mask.sum() + regulator)
+            # Mean over the points to get the total logp and logq
+            regulator = 1
+            total_logq = torch.nanmean(mask * logq, dim=1) #/ (mask.sum() + regulator)
+            total_logJ = torch.nanmean(mask * logJ, dim=1) #/ (mask.sum() + regulator)
+            total_logp = torch.nanmean(mask * logp, dim=1) #/ (mask.sum() + regulator)
+            
 
         # We DON'T want to sum, we want to mean in the loss, since the effective batch size can change
 
+        if mode == "Reverse":
+
+            # Get points on the PDF of the target from a uniform distribution
+            x = torch.rand.uniform(0, 1, (batch_size, num_points)).to(torch_device)
+            log_p = torch.log(target_function(x))
+
+            # Get the latent z's that would produce these points
+            
+
             
         # CALCULATE THE LOSS
-        loss = loss_function(total_logp, total_logq)
+        loss = loss_function(logp, logq, x)
         
         loss.backward()
         optimizer.step()
@@ -190,17 +209,17 @@ def train_model(target_function, loss_function, num_epochs, num_points, batch_si
 #  ########## LOSS FUNCTIONS ##########
 # #####################################
 
-def calc_dkl(logp, logq):
+def calc_dkl(logp, logq, x = None):
     return (torch.nan_to_num(logq) - torch.nan_to_num(logp)).sum() # reverse KL, assuming samples from q
 
-def calc_MSE(logp, logq):
+def calc_MSE(logp, logq, x = None):
 
     p = torch.exp(logp)
     q = torch.exp(logq)
 
     return 0.5 * torch.mean((p - q)**2)
 
-def calc_logMSE(logp, logq):
+def calc_logMSE(logp, logq, x = None):
 
     return 0.5 * torch.mean((logp - logq)**2)
 
