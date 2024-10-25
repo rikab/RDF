@@ -13,26 +13,26 @@ from helpers.flow import *
 
 parser = argparse.ArgumentParser()
 
+ 
+
 parser.add_argument("-id", "--run_id", default="test")
 parser.add_argument("-odir", "--outdir", default="/global/u1/r/rmastand/NNEFT/old/test/")
-
-
-
 parser.add_argument("-mode", "--mode", default="UNIFORM_SAMPLES")
-parser.add_argument("-loss", "--loss", default="logMSE", help="choose from FORWARD, REVERSE, logMSE, ratioMSE")
+parser.add_argument("-loss", "--loss", default="logMSE", help="choose from linearMSE, logMSE, ratioMSE")
+parser.add_argument("-C", "--C", default="C_theta", help="choose from C_theta, C_alpha_1, C_alpha_2, C_alpha_log_1, C_alpha_log_2, C_unscaled, C_theory")
 parser.add_argument("-debug", "--debug", action="store_true")
 
 # hyperparameters
-parser.add_argument("-epochs", "--epochs", default=200)
-parser.add_argument("-nx", "--batch_num_x", default=128)
-parser.add_argument("-nc", "--batch_num_c", default=8)
+parser.add_argument("-epochs", "--epochs", default=200, type=int)
+parser.add_argument("-nx", "--batch_num_x", default=128, type=int)
+parser.add_argument("-nc", "--batch_num_c", default=8, type=int)
 parser.add_argument("-lr", "--lr", default=1e-3)
-parser.add_argument("-seed", "--seed", default=1)
+parser.add_argument("-seed", "--seed", default=1, type=int)
 
 
 # network architecture
-parser.add_argument("-aux", "--auxiliary_params", default=1)
-parser.add_argument("-nt", "--num_transforms", default=5)
+parser.add_argument("-aux", "--auxiliary_params", default=1, type=int)
+parser.add_argument("-nt", "--num_transforms", default=5, type=int)
 parser.add_argument("-hf", "--hidden_features", default="32,32")
 
 args = parser.parse_args()
@@ -51,9 +51,27 @@ run_params["physics"]["target_p"] = str(target_p)
 
 MODE = args.mode
 LOSS = args.loss
+C = args.C
 DEBUG = args.debug
 run_params["MODE"] = MODE
 run_params["LOSS"] = LOSS
+run_params["C"] = C
+
+if args.C == "C_theta":
+    C_prescale = C_theta
+elif args.C == "C_alpha_1":
+    C_prescale = C_alpha_1
+elif args.C == "C_alpha_2":
+    C_prescale = C_alpha_2
+elif args.C == "C_alpha_log_1":
+    C_prescale = C_alpha_log_1
+elif args.C == "C_alpha_log_2":
+    C_prescale = C_alpha_log_2
+elif args.C == "C_unscaled":
+    C_prescale = C_unscaled
+elif args.C == "C_theory":
+    C_prescale = C_theory
+    
 
 epochs = args.epochs
 batch_num_x = args.batch_num_x
@@ -158,7 +176,6 @@ for epoch in t:
         # Note for log_prob to work, we need to pass a tensor of shape (batch_size, >=1)
         logJ = torch.nansum(log_abs_det_jacobian_sigmoid(inverse_sigmoid(xs)), axis = 1)
         logp = torch.nan_to_num(torch.log(target_p(xs, E0, R))[:,0])
-        #logq_c = torch.nan_to_num(((flow(c).log_prob(inverse_sigmoid(xs)) + logJ)))
         
         # tile over the different choices of c
         logq_list = []
@@ -168,12 +185,6 @@ for epoch in t:
         logq = torch.concatenate(logq_list)
         logq += logJ
                 
-        # technically need to adjust logp if aux is anything other than U(0,1)
-
-        # Bou
-        allowed_error = counting_parameter(xs[:,0], E0, C = 1) ** 1
-        # loss = torch.nanmean(Theta(xs[:,0] - c)  * (logp - logq)**2 ) 
-
         # For forward, do plog(p/q), for reverse do qlog(q/p)
 
         norm_p = torch.nanmean(Theta(xs[:,0] - c_expanded) * torch.exp(logp)) 
@@ -182,23 +193,14 @@ for epoch in t:
         logp_prime = logp - torch.nan_to_num(1*torch.log(norm_p))
         logq_prime = logq - torch.nan_to_num(1*torch.log(norm_q))
 
-
-        if LOSS == "FORWARD":
-            loss = torch.nanmean(Theta(xs[:,0] - c_expanded) * torch.exp(logp_prime) * (logp_prime - logq_prime ))
-
-        if LOSS == "REVERSE":
-            loss = torch.nanmean(Theta(xs[:,0] - c_expanded) * torch.exp(logq_prime) * (logq_prime - logp_prime ))
+        if LOSS == "linearMSE":
+            loss = torch.nanmean(C_prescale(xs[:,0],c_expanded,E0,R) * (torch.exp(logp) - torch.exp(logq))**2 )
 
         if LOSS == "logMSE":
-            C = Theta(xs[:,0] - c_expanded)
-            # C = allowed_error / torch.nanmean(allowed_error) 
-            #loss = torch.mean(C * (logp - logq)**2 / c_expanded)
-            loss = torch.mean(C * (logp - logq)**2 )
+            loss = torch.nanmean(C_prescale(xs[:,0],c_expanded,E0,R) * (logp - logq)**2 )
 
         if LOSS == "ratioMSE":
-            C = Theta(xs[:,0] - c_expanded)
-            C = allowed_error 
-            loss = torch.nanmean(C * (1 - torch.exp(logq) / torch.exp(logp))**2 )
+            loss = torch.nanmean(C_prescale(xs[:,0],c_expanded,E0,R) * (1 - torch.exp(logq) / torch.exp(logp))**2 )
 
         if DEBUG:
             logps.append(logp)
@@ -231,6 +233,7 @@ plt.xlabel("epoch")
 plt.ylabel("loss")
 ax.scatter(np.arange(len(losses)), losses)
 plt.yscale("log")
+plt.title(args.run_id)
 plt.savefig(f"{args.outdir}/{args.run_id}_loss")
 
 
@@ -304,6 +307,8 @@ plt.plot(xs, LL_angularity(torch.tensor(xs), E0, R), color = "black", linestyle 
 plt.legend()
 plt.yscale("log")
 plt.ylim(1e-3, 1e3)
+plt.title(args.run_id)
+plt.title(args.run_id)
 plt.savefig(f"{args.outdir}/{args.run_id}_curves")
 
 
@@ -323,6 +328,7 @@ if auxiliary_params > 0:
         prob = flow(c).log_prob(samples).exp()
         # plt.scatter(aux_samples[:,i], prob.detach().numpy(), color = "red")
     plt.legend()
+plt.title(args.run_id)
 plt.savefig(f"{args.outdir}/{args.run_id}_aux_hist")
 
 fig, ax = plt.subplots(1,1)
@@ -334,5 +340,5 @@ bar = ax.hist2d(x_samples, aux_samples[:,0], bins=100, density=True, norm=mpl.co
 plt.colorbar(bar[3])
 plt.xlabel("x")
 plt.ylabel("Aux 0")
-
+plt.title(args.run_id)
 plt.savefig(f"{args.outdir}/{args.run_id}_aux_x_corr")

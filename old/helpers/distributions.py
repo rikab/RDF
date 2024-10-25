@@ -1,6 +1,18 @@
 import numpy as np
 import torch
 
+"""
+"
+"
+GENERIC
+"
+"
+"""
+
+
+lambda_qcd = 0.2
+beta_0 = 11 - 2/3 * 3
+
 def Gaussian(x):
 
     mean = 0
@@ -19,14 +31,22 @@ def Theta(x):
     return torch.where(x > 0, torch.ones_like(x), torch.zeros_like(x))
 
 def alpha_s(scale):
-    lambda_qcd = 0.2
-    beta_0 = 11 - 2/3 * 3
     return 4 * np.pi / (beta_0 * torch.log(scale**2 / lambda_qcd**2))
 
 def dalpha_dscale(scale):
-    lambda_qcd = 0.2
-    beta_0 = 11 - 2/3 * 3
     return -4 * np.pi / beta_0  / (torch.log(scale**2 / lambda_qcd**2) ** 2) * 2 / scale
+
+
+
+
+
+"""
+"
+"
+ANGULARITIES
+"
+"
+"""
 
 def LO_angularity(lambda_, E0, R, beta = 1):
 
@@ -40,7 +60,7 @@ def LO_angularity(lambda_, E0, R, beta = 1):
 
 
 
-def df_dx(lambda_, E0, beta = 1):
+def df_dx(lambda_, E0, R, beta = 1):
 
     lambda_qcd = 0.2
     beta_0 = 11 - 2/3 * 3
@@ -81,10 +101,45 @@ def LL_exact_angularity(lambda_, E0, R, beta = 1):
     C_F = 4/3
     C_A = 3
 
-    p = torch.nan_to_num((LO_angularity(lambda_, beta) + df_dx(lambda_, beta)) * torch.exp(-1 * alpha_s_scale * C_F / (beta * R *  np.pi) * torch.pow(torch.log(lambda_), 2)) )
+    p = torch.nan_to_num((LO_angularity(lambda_, E0, R, beta) + df_dx(lambda_, E0, R, beta)) * torch.exp(-1 * alpha_s_scale * C_F / (beta * R *  np.pi) * torch.pow(torch.log(lambda_), 2)) )
 
     return  (p * Theta(lambda_) * Theta(1 - lambda_)) * 1
 
 
 def counting_parameter(x, E0, C = 1):
     return C * alpha_s(E0 * x) * torch.log(1/x) / x 
+
+
+"""
+"
+"
+C(x,c)
+"
+"
+"""
+def C_theta(x,c,E0,R):
+    return Theta(x-c)
+
+def C_alpha_1(x,c,E0,R):
+    soft_cutoff = beta_0*torch.log((x*E0)**2/ lambda_qcd**2)
+    return 1.0 / (alpha_s(x*E0)**2 + soft_cutoff*alpha_s(x*E0)**3)
+
+def C_alpha_2(x,c,E0,R):
+    soft_cutoff = beta_0*torch.log((x*E0)**2/ lambda_qcd**2)
+    return 1.0 / (alpha_s(x*E0) + soft_cutoff*alpha_s(x*E0)**2)**2
+
+def C_alpha_log_1(x,c,E0,R):
+    soft_cutoff = beta_0*x*(torch.log(1.0/x))*torch.log((x*E0)**2/ lambda_qcd**2)
+    return 1.0 / ((alpha_s(x*E0)*torch.log(1.0/x)/x)**2 + soft_cutoff*(alpha_s(x*E0)*torch.log(1.0/x)/x)**3)
+
+def C_alpha_log_2(x,c,E0,R):
+    soft_cutoff = beta_0*x*(torch.log(1.0/x))*torch.log((x*E0)**2/ lambda_qcd**2)
+    return 1.0 / ((alpha_s(x*E0)*torch.log(1.0/x)/x) + soft_cutoff*(alpha_s(x*E0)*torch.log(1.0/x)/x)**2)**2
+
+def C_unscaled(x,c,E0,R):
+    return c/alpha_s(x*E0)
+
+def C_theory(x,c,E0,R):
+    R_x = LL_exact_angularity(x, E0, R)/LO_angularity(x, E0, R)
+    return LO_angularity(x, E0, R)*R_x/(2*torch.log(R_x))
+
