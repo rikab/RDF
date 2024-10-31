@@ -64,9 +64,6 @@ def LO_angularity(lambda_, alpha, E0, R, beta = 1):
 
     scale = E0 * torch.pow(lambda_, 1 / (beta))
     alpha_s_scale = run_alpha(alpha, 91, scale)
-    
-    C_F = 4/3
-    C_A = 3
 
     return -torch.nan_to_num(((2 * alpha_s_scale * C_F / (1 * np.pi * beta * R)) * torch.log(lambda_ ) / lambda_ * Theta(1 - lambda_)) )* Theta(lambda_)* Theta(1-lambda_)
 
@@ -81,17 +78,13 @@ def df_dx(lambda_, alpha_s_scale, E0, R, beta = 1):
 
     return dLO_dalpha * dalpha_dscale * dscale_dlambda
 
-   
 
-def LL_angularity(lambda_, E0, R, beta = 1):
+def LL_angularity(lambda_, alpha, E0, R, beta = 1):
 
     scale = E0 * torch.pow(lambda_, 1 / (beta))
+    alpha_s_scale = run_alpha(alpha, 91, scale)
 
-    alpha_s_scale = alpha_s(scale)
-    C_F = 4/3
-    C_A = 3
-
-    p = torch.nan_to_num(LO_angularity(lambda_, E0, R, beta) * torch.exp(-1 * alpha_s_scale * C_F / (beta * R *  np.pi) * torch.pow(torch.log(lambda_), 2)) )
+    p = torch.nan_to_num(LO_angularity(lambda_, alpha, E0, R, beta) * torch.exp(-1 * alpha_s_scale * C_F / (beta * R *  np.pi) * torch.pow(torch.log(lambda_), 2)) )
 
     return (p * Theta(lambda_) * Theta(1 - lambda_))
 
@@ -100,10 +93,7 @@ def LL_angularity(lambda_, E0, R, beta = 1):
 def LL_exact_angularity(lambda_, E0, R, beta = 1):
 
     scale = E0 * torch.pow(lambda_, 1 / (beta))
-
-    alpha_s_scale = alpha_s(scale)
-    C_F = 4/3
-    C_A = 3
+    alpha_s_scale = run_alpha(alpha, 91, scale)
 
     p = torch.nan_to_num((LO_angularity(lambda_, E0, R, beta) + df_dx(lambda_, E0, R, beta)) * torch.exp(-1 * alpha_s_scale * C_F / (beta * R *  np.pi) * torch.pow(torch.log(lambda_), 2)) )
 
@@ -121,31 +111,42 @@ C(x,c)
 "
 "
 """
-def C_theta(x,c,E0,R):
-    #return Theta(x-c)
-    T = 0.001
-    return torch.sigmoid((x-c)/T)
 
-def C_alpha_1(x,c,E0,R):
-    soft_cutoff = beta_0*torch.log((x*E0)**2/ lambda_qcd**2)
-    return 1.0 / (alpha_s(x*E0)**2 + soft_cutoff*alpha_s(x*E0)**3)
+def C_prescale(lambda_, alpha, E0, R, C_type, beta=1):
+    s
+    loc_scale = E0 * torch.pow(lambda_, 1 / (beta))
+    loc_alpha_s_scale = run_alpha(alpha, 91, loc_scale)
+    loc_lambda_qcd = lambda_qcd(alpha, loc_scale)
 
-def C_alpha_2(x,c,E0,R):
-    soft_cutoff = beta_0*torch.log((x*E0)**2/ lambda_qcd**2)
-    return 1.0 / (alpha_s(x*E0) + soft_cutoff*alpha_s(x*E0)**2)**2
 
-def C_alpha_log_1(x,c,E0,R):
-    soft_cutoff = beta_0*x*(torch.log(1.0/x))*torch.log((x*E0)**2/ lambda_qcd**2)
-    return 1.0 / ((alpha_s(x*E0)*torch.log(1.0/x)/x)**2 + soft_cutoff*(alpha_s(x*E0)*torch.log(1.0/x)/x)**3)
+    if C_type == "C_theta":
+        T = 0.001
+        return torch.sigmoid((lambda_-alpha)/T)
+        
+    elif C_type == "C_alpha_1":
+        soft_cutoff = beta_0*torch.log(loc_scale**2 / loc_lambda_qcd**2)
+        return 1.0 / (loc_alpha_s_scale**2 + soft_cutoff*loc_alpha_s_scale**3)
+    
+    elif C_type == "C_alpha_2":
+        soft_cutoff = beta_0*torch.log((loc_scale)**2/ loc_lambda_qcd**2)
+        return 1.0 / (loc_alpha_s_scale + soft_cutoff*loc_alpha_s_scale**2)**2
 
-def C_alpha_log_2(x,c,E0,R):
-    soft_cutoff = beta_0*x*(torch.log(1.0/x))*torch.log((x*E0)**2/ lambda_qcd**2)
-    return 1.0 / ((alpha_s(x*E0)*torch.log(1.0/x)/x) + soft_cutoff*(alpha_s(x*E0)*torch.log(1.0/x)/x)**2)**2
+    elif C_type == "C_alpha_log_1":
+        soft_cutoff = beta_0*x*(torch.log(1.0/x))*torch.log((loc_scale)**2/ loc_lambda_qcd**2)
+        return 1.0 / ((loc_alpha_s_scale*torch.log(1.0/x)/x)**2 + soft_cutoff*(loc_alpha_s_scale*torch.log(1.0/x)/x)**3)
 
-def C_unscaled(x,c,E0,R):
-    return c/alpha_s(x*E0)
 
-def C_theory(x,c,E0,R):
-    R_x = LL_exact_angularity(x, E0, R)/LO_angularity(x, E0, R)
-    return LO_angularity(x, E0, R)*R_x/(2*torch.log(R_x))
+    elif C_type == "C_alpha_log_2":
+        soft_cutoff = beta_0*x*(torch.log(1.0/x))*torch.log((loc_scale)**2/ loc_lambda_qcd**2)
+        return 1.0 / ((loc_alpha_s_scale*torch.log(1.0/x)/x) + soft_cutoff*loc_alpha_s_scale(*torch.log(1.0/x)/x)**2)**2
+    
+    elif C_type == "C_unscaled":
+        return alpha/loc_alpha_s_scale
+    
+    elif C_type == "C_theory":
+        R_x = LL_exact_angularity(x, E0, R)/LO_angularity(x, E0, R)
+        return LO_angularity(x, E0, R)*R_x/(2*torch.log(R_x))
+    
+
+
 
