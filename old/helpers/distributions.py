@@ -10,8 +10,11 @@ GENERIC
 """
 
 
-lambda_qcd = 0.2
 beta_0 = 11 - 2/3 * 3
+
+C_F = 4/3
+C_A = 3
+
 
 def Gaussian(x):
 
@@ -30,14 +33,22 @@ def Uniform(x):
 def Theta(x):
     return torch.where(x > 0, torch.ones_like(x), torch.zeros_like(x))
 
-def alpha_s(scale):
+def alpha_s(scale, lambda_qcd = 0.2):
+    beta_0 = 11 - 2/3 * 3
     return 4 * np.pi / (beta_0 * torch.log(scale**2 / lambda_qcd**2))
 
 def dalpha_dscale(scale):
     return -4 * np.pi / beta_0  / (torch.log(scale**2 / lambda_qcd**2) ** 2) * 2 / scale
 
+def lambda_qcd(alpha0, scale0):
+    beta_0 = 11 - 2/3 * 3
+    return scale0 * torch.exp(-1 * (2 * np.pi) / (  beta_0 * alpha0))
 
+def run_alpha(alpha0, scale0, scale1):
 
+    beta_0 = 11 - 2/3 * 3
+
+    return alpha0 / (1 + beta_0 / (4 * np.pi) * torch.log(scale1**2 / scale0**2))
 
 
 """
@@ -48,11 +59,12 @@ ANGULARITIES
 "
 """
 
-def LO_angularity(lambda_, E0, R, beta = 1):
+def LO_angularity(lambda_, alpha, E0, R, beta = 1):
+
 
     scale = E0 * torch.pow(lambda_, 1 / (beta))
-
-    alpha_s_scale = alpha_s(scale)
+    alpha_s_scale = run_alpha(alpha, 91, scale)
+    
     C_F = 4/3
     C_A = 3
 
@@ -60,16 +72,8 @@ def LO_angularity(lambda_, E0, R, beta = 1):
 
 
 
-def df_dx(lambda_, E0, R, beta = 1):
 
-    lambda_qcd = 0.2
-    beta_0 = 11 - 2/3 * 3
-
-    scale = E0 * torch.pow(lambda_, 1 / (beta))
-    alpha_s_scale = alpha_s(scale)
-
-    C_F = 4/3
-
+def df_dx(lambda_, alpha_s_scale, E0, R, beta = 1):
 
     dLO_dalpha =  -C_F / (beta * R *  np.pi) * torch.pow(torch.log(lambda_), 2)
     dalpha_dscale = -4 * np.pi / beta_0  / (torch.log(scale**2 / lambda_qcd**2) ** 2) * 2 / scale
@@ -118,7 +122,9 @@ C(x,c)
 "
 """
 def C_theta(x,c,E0,R):
-    return Theta(x-c)
+    #return Theta(x-c)
+    T = 0.001
+    return torch.sigmoid((x-c)/T)
 
 def C_alpha_1(x,c,E0,R):
     soft_cutoff = beta_0*torch.log((x*E0)**2/ lambda_qcd**2)
