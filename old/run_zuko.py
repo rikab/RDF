@@ -8,19 +8,21 @@ import zuko
 import argparse
 import yaml
 
-from helpers.distributions import *
+from helpers.distributions_old import *
 from helpers.flow import *
+
 
 parser = argparse.ArgumentParser()
 
- 
 
 parser.add_argument("-id", "--run_id", default="test")
-parser.add_argument("-odir", "--outdir", default="/global/u1/r/rmastand/NNEFT/old/test/")
+parser.add_argument("-odir", "--outdir", default="/global/cfs/cdirs/m3246/rmastand/NNEFT/outputs/")
 parser.add_argument("-mode", "--mode", default="UNIFORM_SAMPLES")
 parser.add_argument("-loss", "--loss", default="logMSE", help="choose from linearMSE, logMSE, ratioMSE")
 parser.add_argument("-C", "--C", default="C_theta", help="choose from C_theta, C_alpha_1, C_alpha_2, C_alpha_log_1, C_alpha_log_2, C_unscaled, C_theory")
 parser.add_argument("-debug", "--debug", action="store_true")
+parser.add_argument("-type", "--type", default="nsf")
+
 
 # hyperparameters
 parser.add_argument("-epochs", "--epochs", default=200, type=int)
@@ -31,9 +33,9 @@ parser.add_argument("-seed", "--seed", default=1, type=int)
 
 
 # network architecture
-parser.add_argument("-aux", "--auxiliary_params", default=1, type=int)
+parser.add_argument("-aux", "--auxiliary_params", default=0, type=int)
 parser.add_argument("-nt", "--num_transforms", default=5, type=int)
-parser.add_argument("-hf", "--hidden_features", default="32,32")
+parser.add_argument("-hf", "--hidden_features", default="16,16")
 
 args = parser.parse_args()
 
@@ -51,11 +53,13 @@ run_params["physics"]["target_p"] = str(target_p)
 
 MODE = args.mode
 LOSS = args.loss
+TYPE = args.type
 C = args.C
 DEBUG = args.debug
 run_params["MODE"] = MODE
 run_params["LOSS"] = LOSS
 run_params["C"] = C
+run_params["TYPE"] = TYPE
 
 if args.C == "C_theta":
     C_prescale = C_theta
@@ -77,7 +81,7 @@ epochs = args.epochs
 batch_num_x = args.batch_num_x
 batch_num_c = args.batch_num_c
 batch_size = batch_num_x*batch_num_c
-lr = args.lr
+lr = float(args.lr)
 
 run_params["hyperparams"]["epochs"] = epochs
 run_params["hyperparams"]["batch_num_x"] = batch_num_x
@@ -100,7 +104,11 @@ np.random.seed(args.seed)
 
 # initialize the flow
 
-flow = zuko.flows.NSF(features = auxiliary_params + 1, context=1, transforms= num_transforms, hidden_features=hidden_features)
+if TYPE == "bpf":
+    flow = zuko.flows.BPF(features = auxiliary_params + 1, context=1, transforms= num_transforms, hidden_features=hidden_features)
+elif TYPE == "nsf":
+    flow = zuko.flows.NSF(features = auxiliary_params + 1, context=1, transforms= num_transforms, hidden_features=hidden_features)
+
 
 optimizer = torch.optim.Adam(flow.parameters(), lr=lr)
 
