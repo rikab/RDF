@@ -1,0 +1,21 @@
+C: C_theory
+LOSS: logMSE
+MODE: UNIFORM_SAMPLES
+TYPE: bpf
+architecture:
+  hidden_features:
+  - 32
+  - 32
+  num_aux: 0
+  num_trainable_params: 8405
+  num_transforms: 5
+hyperparams:
+  batch_num_c: 32
+  batch_num_x: 512
+  epochs: 2000
+  lr: 0.001
+  seed: 1
+physics:
+  E0: 500
+  R: 0.4
+  target_p: <function LO_angularity at 0x7f93f4a025e0>

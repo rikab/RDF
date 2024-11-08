@@ -1,1 +1,3 @@
 *.npy
+old/test/*
+radha_outputs/*

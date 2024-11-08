@@ -1,0 +1,21 @@
+C: C_unscaled
+LOSS: linearMSE
+MODE: UNIFORM_SAMPLES
+TYPE: nsf
+architecture:
+  hidden_features:
+  - 64
+  - 64
+  num_aux: 0
+  num_trainable_params: 52047
+  num_transforms: 9
+hyperparams:
+  batch_num_c: 32
+  batch_num_x: 512
+  epochs: 2000
+  lr: 0.0001
+  seed: 1
+physics:
+  E0: 500
+  R: 0.4
+  target_p: <function LO_angularity at 0x7f25a7602550>
