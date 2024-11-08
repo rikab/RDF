@@ -1,3 +1,6 @@
 *.npy
 old/test/*
 radha_outputs/*
+*.yml
+*.png
+*_model
