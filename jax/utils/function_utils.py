@@ -82,6 +82,20 @@ def polynomial_power(c, k):
 
 
 
+def print_polynomial(c):
+
+    # Print the polynomial in a human-readable grid.
+    M, N = c.shape
+    for m in range(M):
+        s = ""
+        for n in range(N):
+            s += f"c_{m},{n} = {c[m, n]:.2e} "
+        print(s)
+
+            
+
+
+
 # ##############################
 # ########## CALCULUS ##########
 # ##############################
@@ -162,3 +176,51 @@ def taylor_expand_2d(f, t0, alpha0, M, N, params=None):
             c = c.at[m_, n_].set(val / denom)
 
     return c
+
+
+def integrate_taylor_polynomial(c):
+  
+
+    M_plus_1, N_plus_1 = c.shape
+    M = M_plus_1 - 1
+    N = N_plus_1 - 1
+    
+    # New array will have shape (M+1, N+2)
+    d = np.zeros((M_plus_1, N_plus_1 + 1), dtype=c.dtype)
+    
+    # d[m,n] = c[m,n-1]/n, except d[m,0] = 0.
+    for m in range(M_plus_1):
+        for n in range(1, N+2):
+            d[m, n] = c[m, n-1] / n
+
+    return d
+
+def derivative_taylor_polynomial(c):
+
+    M_plus_1, N_plus_1 = c.shape
+    M = M_plus_1 - 1
+    N = N_plus_1 - 1
+
+    # New array will have shape (M+1, N)
+    d = np.zeros((M_plus_1, N_plus_1 - 1), dtype=c.dtype)
+    
+    # d[m,n] = c[m,n+1]*(n+1), except d[m,N] = 0.
+    for m in range(M_plus_1):
+        for n in range(N):
+            d[m, n] = c[m, n+1] * (n+1)
+
+    return d
+
+
+
+def matching_coeffs(f, M, N):
+
+    coeffs = taylor_expand_2d(f, 0.0, 0.0, M, N)
+    integral_coeffs = integrate_taylor_polynomial(coeffs)
+
+    K = M + N
+
+
+    polynomial_coeffs = polynomial_sum([polynomial_power(integral_coeffs, k+1) / (k+1.0) for k in range(K+1)])
+    return polynomial_coeffs[:M+1, :N+1]
+
