@@ -2,7 +2,7 @@ import numpy as np
 import jax.numpy as jnp
 import jax
 import math
-from scipy.signal import convolve2d
+from jax.scipy.signal import convolve2d
 
 
 # #################################
@@ -18,7 +18,7 @@ def build_powers(base, length):
         return arr.at[i].set(arr[i-1] * base)
     
     # Initialize an array of zeros, then set arr[0] = 1
-    arr = jnp.zeros((length,))
+    arr = jnp.zeros((length,) ,  dtype = jnp.array(base).dtype)
     arr = arr.at[0].set(1.0)
     
     # fori_loop will fill in arr[1], arr[2], ... arr[length-1]
@@ -195,21 +195,15 @@ def integrate_taylor_polynomial(c):
 
     return d
 
-def derivative_taylor_polynomial(c):
-
+@jax.jit
+def derivative_t_polynomial(c):
     M_plus_1, N_plus_1 = c.shape
-    M = M_plus_1 - 1
-    N = N_plus_1 - 1
+    return c[:, 1:] * jnp.arange(1, N_plus_1, dtype=c.dtype)
 
-    # New array will have shape (M+1, N)
-    d = np.zeros((M_plus_1, N_plus_1 - 1), dtype=c.dtype)
-    
-    # d[m,n] = c[m,n+1]*(n+1), except d[m,N] = 0.
-    for m in range(M_plus_1):
-        for n in range(N):
-            d[m, n] = c[m, n+1] * (n+1)
-
-    return d
+@jax.jit
+def derivative_alpha_polynomial(c):
+    M_plus_1, N_plus_1 = c.shape
+    return c[1:, :] * jnp.arange(1, M_plus_1, dtype=c.dtype)[:, None]
 
 
 
