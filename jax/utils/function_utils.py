@@ -207,13 +207,11 @@ def derivative_alpha_polynomial(c):
 
 
 
-def matching_coeffs(f, M, N):
+def matching_coeffs(coeffs, M, N):
 
-    coeffs = taylor_expand_2d(f, 0.0, 0.0, M, N)
     integral_coeffs = integrate_taylor_polynomial(coeffs)
 
     K = M + N
-
 
     polynomial_coeffs = polynomial_sum([polynomial_power(integral_coeffs, k+1) / (k+1.0) for k in range(K+1)])
     return polynomial_coeffs[:M+1, :N+1]
