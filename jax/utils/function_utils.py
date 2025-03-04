@@ -10,7 +10,6 @@ from jax.scipy.signal import convolve2d
 # #################################
 
 # Necessary for jax to work with 0^0@jax.jit
-
 def build_powers(base, length):
    
     def body_fun(i, arr):
@@ -24,7 +23,6 @@ def build_powers(base, length):
     # fori_loop will fill in arr[1], arr[2], ... arr[length-1]
     arr = jax.lax.fori_loop(1, length, body_fun, arr)
     return arr
-
 
 
 @jax.jit
@@ -41,7 +39,7 @@ def polynomial(t, alpha, params):
     poly_val = alpha_powers @ params @ t_powers
     return poly_val
 
-
+# Multiply two 2D polynomials using their coefficient arrays
 def polynomial_multiply(c1, c2, M = None, N = None):
 
     if M is None:
@@ -81,7 +79,7 @@ def polynomial_power(c, k):
         return polynomial_multiply(c, polynomial_power(c, k-1))
 
 
-
+# Debug Tool
 def print_polynomial(c):
 
     # Print the polynomial in a human-readable grid.
@@ -93,6 +91,34 @@ def print_polynomial(c):
         print(s)
 
             
+
+
+def reduce_order(c_mn):
+
+    M, N = c_mn.shape
+    first_nonzero_m = 0
+    for m in range(M):
+        if np.any(c_mn[m, :] != 0):
+            first_nonzero_m = m
+            break
+
+    first_nonzero_n = 0
+    for n in range(N):
+        if np.any(c_mn[:, n] != 0):
+            first_nonzero_n = n
+            break
+
+    lowest_order_coeff = c_mn[first_nonzero_m, first_nonzero_n]
+
+    return c_mn[first_nonzero_m:, first_nonzero_n:] / lowest_order_coeff, first_nonzero_m, first_nonzero_n, lowest_order_coeff
+
+
+def collapse_in_alpha(alpha, c_mn):
+
+    M, N = c_mn.shape
+    alpha_powers = build_powers(alpha, M)
+
+    return alpha_powers @ c_mn 
 
 
 
@@ -207,12 +233,43 @@ def derivative_alpha_polynomial(c):
 
 
 
-def matching_coeffs(coeffs, M, N):
 
-    integral_coeffs = integrate_taylor_polynomial(coeffs)
+def log_match(c_mn, M, N):
 
     K = M + N
 
-    polynomial_coeffs = polynomial_sum([polynomial_power(integral_coeffs, k+1) / (k+1.0) for k in range(K+1)])
+    polynomial_coeffs = polynomial_sum([polynomial_power(c_mn, k+1) / (k+1.0) for k in range(K+1)])
     return polynomial_coeffs[:M+1, :N+1]
 
+
+
+
+def matching_coeffs(p_t, M, N, t_min = 0.0):
+ 
+    p_mn = taylor_expand_2d(p_t, t_min, 0.0, M, N)
+    P_mn = integrate_taylor_polynomial(p_mn)
+
+    # print_polynomial(p_mn)
+    # print_polynomial(P_mn)
+    # print("")
+
+
+    # Divide out the lowest order term of p_mn
+    p_mn_reduced, m_star, n_star, p_star = reduce_order(p_mn)
+    p_mn_reduced = p_mn_reduced.at[0, 0].set(0.0)
+
+    p_matched = log_match(-p_mn_reduced, M - m_star, N-n_star)
+    P_matched = log_match(P_mn, M, N) 
+
+    # print("p_matched")
+    # print_polynomial(p_matched)
+    # print("P_matched")
+    # print_polynomial(P_matched)
+    # print("")
+
+
+    g_mn = polynomial_sum([-p_matched, P_matched])
+    g_star = jnp.zeros((M+1, N+1))
+    g_star = g_star.at[m_star, n_star].set(-p_star)
+
+    return g_mn, g_star

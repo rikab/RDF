@@ -28,4 +28,4 @@ def running_coupling(alpha_0, mu0, mu):
     """
     Running coupling constant at scale mu, given the coupling at scale mu0.
     """
-    return alpha_0 / (1 + beta0 * alpha_0 * np.log(mu / mu0) / (2 * np.pi))
+    return alpha_0 / (1 + beta0 * alpha_0 * jnp.log(mu / mu0) / (2 * jnp.pi))
