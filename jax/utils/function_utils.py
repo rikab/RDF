@@ -243,13 +243,19 @@ def log_match(c_mn, M, N):
 
 
 
+def matching_coeffs(p_t, M, N):
 
-def matching_coeffs(p_t, M, N, t_min = 0.0):
+    # There has to be *some* perturbative info!
+    if M == 0:
+        raise ValueError("M must be greater than 0")
  
-    p_mn = taylor_expand_2d(p_t, t_min, 0.0, M, N)
+    
+    p_mn = taylor_expand_2d(p_t, 0.0, 0.0, M, N)
     P_mn = integrate_taylor_polynomial(p_mn)
 
+    # print("p_mn")
     # print_polynomial(p_mn)
+    # print("P_mn")
     # print_polynomial(P_mn)
     # print("")
 
@@ -258,7 +264,8 @@ def matching_coeffs(p_t, M, N, t_min = 0.0):
     p_mn_reduced, m_star, n_star, p_star = reduce_order(p_mn)
     p_mn_reduced = p_mn_reduced.at[0, 0].set(0.0)
 
-    p_matched = log_match(-p_mn_reduced, M - m_star, N-n_star)
+    p_matched = log_match(-p_mn_reduced, M, N)
+    # p_matched = log_match(-p_mn_reduced, M - m_star, N-n_star)
     P_matched = log_match(P_mn, M, N) 
 
     # print("p_matched")

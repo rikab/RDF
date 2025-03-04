@@ -60,6 +60,6 @@ def integrate_f(t, alpha, g_star, g_mn):
 
 
 
-def q(t, alpha, g_star, g_mn, t_min):
+def q(t, alpha, g_star, g_mn):
 
-    return f(t - t_min, alpha, g_star, g_mn) * jnp.exp(-integrate_f(t - t_min, alpha, g_star, g_mn))
+    return f(t, alpha, g_star, g_mn) * jnp.exp(-integrate_f(t, alpha, g_star, g_mn))
