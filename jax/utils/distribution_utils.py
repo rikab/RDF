@@ -1,7 +1,7 @@
 import jax
 import jax.numpy as jnp
 from jax.experimental.ode import odeint
-
+import diffrax
 
 from utils.function_utils import polynomial
 
@@ -49,14 +49,34 @@ def integrate_f(t, alpha, g_star, g_mn):
 
     # prefactor = jnp.exp(-)
 
-    def dI_dt(I, t):
+    epsabs = epsrel = 1e-5
+
+    def dI_dt(t, y, args):
         return f(t, alpha, g_star, g_mn)
     
-    I0 = 0.0
-    ts = jnp.array([0.0, t])
-    Is = odeint(dI_dt, I0, ts)
 
-    return Is[-1]
+    term = diffrax.ODETerm(dI_dt,)
+    solver = diffrax.Dopri5()
+
+    y0 = jnp.array([0.0])
+    t0 = 0.0
+    T = t
+    saveat = diffrax.SaveAt(ts = jnp.array([T]))
+    stepsize_controller = diffrax.PIDController(rtol = epsrel, atol = epsabs)
+    dt0 = 0.10
+
+    sol = diffrax.diffeqsolve(term, solver, t0 = t0, t1 = T, y0 = y0, saveat = saveat, dt0 = dt0, stepsize_controller = stepsize_controller)
+
+    y = sol.ys[0]
+    return y
+
+    # I0 = 0.0
+    # ts = jnp.array([0.0, t])
+    # Is = odeint(dI_dt, I0, ts)
+
+    # y, info = quadgk(dI_dt, [0, t], epsabs=epsabs, epsrel=epsrel)
+
+    return term
 
 
 
