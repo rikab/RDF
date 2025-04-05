@@ -40,39 +40,39 @@ def f(t, alpha, g_star, g_mn):
 @jax.jit
 def integrate_f(t, alpha, g_star, g_mn):
 
-    # g_mn_alpha = collapse_in_alpha(alpha, g_mn)
+    try: 
+        epsabs = epsrel = 1e-5
 
-    # # Get the Gaussian (quadratic) part
-    # g0 = g_mn_alpha[0]
-    # g1 = g_mn_alpha[1]
-    # g2 = g_mn_alpha[2]
+        def dI_dt(t, y, args):
+            return f(t, alpha, g_star, g_mn)
+        
 
-    # prefactor = jnp.exp(-)
+        term = diffrax.ODETerm(dI_dt,)
+        solver = diffrax.Dopri5()
 
-    epsabs = epsrel = 1e-5
+        y0 = jnp.array([0.0])
+        t0 = 0.0
+        T = t
+        saveat = diffrax.SaveAt(ts = jnp.array([T]))
+        stepsize_controller = diffrax.PIDController(rtol = epsrel, atol = epsabs)
+        dt0 = 0.10
 
-    def dI_dt(t, y, args):
-        return f(t, alpha, g_star, g_mn)
+        sol = diffrax.diffeqsolve(term, solver, t0 = t0, t1 = T, y0 = y0, saveat = saveat, dt0 = dt0, stepsize_controller = stepsize_controller, maxiters = 10000)
+
+        y = sol.ys[0]
+        return y
     
+    except:
 
-    term = diffrax.ODETerm(dI_dt,)
-    solver = diffrax.Dopri5()
+        def dI_dt(t, I):
+            return f(t, alpha, g_star, g_mn)
 
-    y0 = jnp.array([0.0])
-    t0 = 0.0
-    T = t
-    saveat = diffrax.SaveAt(ts = jnp.array([T]))
-    stepsize_controller = diffrax.PIDController(rtol = epsrel, atol = epsabs)
-    dt0 = 0.10
+        I0 = 0.0
+        ts = jnp.array([0.0, t])
+        Is = odeint(dI_dt, I0, ts)
 
-    sol = diffrax.diffeqsolve(term, solver, t0 = t0, t1 = T, y0 = y0, saveat = saveat, dt0 = dt0, stepsize_controller = stepsize_controller)
-
-    y = sol.ys[0]
-    return y
-
-    # I0 = 0.0
-    # ts = jnp.array([0.0, t])
-    # Is = odeint(dI_dt, I0, ts)
+        term = Is[-1]
+        return term
 
     # y, info = quadgk(dI_dt, [0, t], epsabs=epsabs, epsrel=epsrel)
 
@@ -83,3 +83,17 @@ def integrate_f(t, alpha, g_star, g_mn):
 def q(t, alpha, g_star, g_mn):
 
     return f(t, alpha, g_star, g_mn) * jnp.exp(-integrate_f(t, alpha, g_star, g_mn))
+
+
+def log_q(t, alpha, g_star, g_mn):
+
+    # f part
+    poly = polynomial(t, alpha, g_mn)
+    g_star_poly = polynomial(t, alpha, g_star)
+    term1 = jnp.log( -1 * g_star_poly) - poly
+
+    # integral part
+    integral = integrate_f(t, alpha, g_star, g_mn)
+    term2 = -1 * integral
+
+    return term1 + term2    

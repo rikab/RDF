@@ -92,21 +92,52 @@ def print_polynomial(c):
 
             
 
+def latex_polynomial(c, eps = 1e-6):
+
+
+    # Print the polynomial in a latex-readable grid using pmatrix
+    M, N = c.shape
+    s = "\\begin{pmatrix}\n"
+    for m in range(M):
+        for n in range(N):
+
+            # Check if the coefficient is close to an integer
+            cmn = c[m, n]
+            if cmn - eps <= round(cmn) <= cmn + eps:
+                cmn = round(cmn)
+                s+= f"{int(cmn)} "
+            else:
+                s += f"{c[m, n]:.2e} "
+            if n < N - 1:
+                s += "& "
+        if m < M - 1:
+            s += "\\\\ \n"
+        else:
+            s += "\\end{pmatrix}\n"
+    return s
+
+
 
 def reduce_order(c_mn):
 
     M, N = c_mn.shape
-    first_nonzero_m = 0
-    for m in range(M):
-        if np.any(c_mn[m, :] != 0):
-            first_nonzero_m = m
-            break
+    epsilon = 1e-3
 
     first_nonzero_n = 0
     for n in range(N):
-        if np.any(c_mn[:, n] != 0):
+        if np.any(np.abs(c_mn[:, n]) > epsilon):
             first_nonzero_n = n
             break
+
+    
+
+    first_nonzero_m = 0
+    for m in range(M):
+        if np.any(np.abs(c_mn[m, :(first_nonzero_n+1)]) > epsilon):
+            first_nonzero_m = m
+            break
+
+
 
     lowest_order_coeff = c_mn[first_nonzero_m, first_nonzero_n]
 
@@ -161,7 +192,7 @@ def taylor_expand_2d(f, t0, alpha0, M, N, params=None):
         f_list.append(fn_plus_1)
 
     # For each f_list[n], we get all derivatives wrt alpha at alpha0,    
-    c = jnp.zeros((M+1, N+1), dtype=jnp.float64)
+    c = jnp.zeros((M+1, N+1), dtype=jnp.float32)
 
     def derivatives_wrt_alpha_up_to_order_M(fn_of_alpha, alpha0, M):
         """
