@@ -55,9 +55,9 @@ def integrate_f(t, alpha, g_star, g_mn):
         T = t
         saveat = diffrax.SaveAt(ts = jnp.array([T]))
         stepsize_controller = diffrax.PIDController(rtol = epsrel, atol = epsabs)
-        dt0 = 0.10
+        dt0 = 0.01
 
-        sol = diffrax.diffeqsolve(term, solver, t0 = t0, t1 = T, y0 = y0, saveat = saveat, dt0 = dt0, stepsize_controller = stepsize_controller, maxiters = 10000)
+        sol = diffrax.diffeqsolve(term, solver, t0 = t0, t1 = T, y0 = y0, saveat = saveat, dt0 = dt0, stepsize_controller = stepsize_controller, max_steps = 10000)
 
         y = sol.ys[0]
         return y

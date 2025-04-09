@@ -284,12 +284,6 @@ def matching_coeffs(p_t, M, N):
     p_mn = taylor_expand_2d(p_t, 0.0, 0.0, M, N)
     P_mn = integrate_taylor_polynomial(p_mn)
 
-    # print("p_mn")
-    # print_polynomial(p_mn)
-    # print("P_mn")
-    # print_polynomial(P_mn)
-    # print("")
-
 
     # Divide out the lowest order term of p_mn
     p_mn_reduced, m_star, n_star, p_star = reduce_order(p_mn)
@@ -301,11 +295,10 @@ def matching_coeffs(p_t, M, N):
     
     P_matched = log_match(P_mn, M, N) 
 
-    # print("p_matched")
-    # print_polynomial(p_matched)
-    # print("P_matched")
-    # print_polynomial(P_matched)
-    # print("")
+    # We want to get rid of the extra orders in the polynomial, we only need M - m_star since g_star makes up for it
+    P_matched = P_matched.at[M-m_star + 1:, :].set(0.0)
+    P_matched = P_matched.at[:, N-n_star + 1:].set(0.0)
+
 
 
     g_mn = polynomial_sum([-p_matched, P_matched])
