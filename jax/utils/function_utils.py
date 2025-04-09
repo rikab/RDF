@@ -295,8 +295,10 @@ def matching_coeffs(p_t, M, N):
     p_mn_reduced, m_star, n_star, p_star = reduce_order(p_mn)
     p_mn_reduced = p_mn_reduced.at[0, 0].set(0.0)
 
-    p_matched = log_match(-p_mn_reduced, M, N)
-    # p_matched = log_match(-p_mn_reduced, M - m_star, N-n_star)
+    # p_matched = log_match(-p_mn_reduced, M, N)
+    p_matched = log_match(-p_mn_reduced, M - m_star, N-n_star)
+
+    
     P_matched = log_match(P_mn, M, N) 
 
     # print("p_matched")
