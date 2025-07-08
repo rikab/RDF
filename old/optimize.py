@@ -29,7 +29,7 @@ args = parser.parse_args()
 
 outfile_name = f"{args.distribution}_{args.order_to_match}_{args.name}"
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+device = "cpu"#torch.device("cuda" if torch.cuda.is_available() else "cpu")
 torch.manual_seed(args.seed)
 np.random.seed(args.seed)
 
@@ -105,7 +105,7 @@ def get_pdf(alpha, *, example="exponential", order=1):
         if order == -1:
             y = alpha * torch.exp(-alpha * t_bin_centers)
         elif order == 1:
-            y = alpha.expand_as(t_bin_centers)
+            y = alpha.expand_as(alpha * t_bin_centers) * 0 + alpha 
         elif order == 2:
             y = alpha * (1 - alpha * t_bin_centers)
     elif example == "angularity":
@@ -126,25 +126,86 @@ ofile.write(f"Epochs: {args.epochs}\nLearning rate: {args.lr}\nBatch size: {args
 ofile.write("initial g:\n")
 np.savetxt(ofile, g_coeffs_to_fit.detach().cpu().numpy())
 
-def train(epochs, batch_size, lr):
-    
-    g_coeffs_to_fit.requires_grad_()
-    optimizer = torch.optim.AdamW([g_coeffs_to_fit], lr=lr)
-    MSE_criterion = torch.nn.MSELoss()
-    losses = np.zeros((epochs, 1))
-    g_coeffs_log = np.zeros((epochs + 1, *g_coeffs_to_fit.shape))
-    g_coeffs_log[0] = g_coeffs_to_fit.detach().cpu().numpy()
-    alpha_zero = torch.zeros(1, device=device, requires_grad=True)
+
+if args.use_rikab_loss:
+    def train(epochs, batch_size, lr):
 
     
-    for epoch in tqdm(range(epochs)):
-        optimizer.zero_grad()
-        # clear cache because g_coeffs just changed last step
-        cumtrapz_cache.clear()
-
-        # RADHA LOSS
-        if not args.use_rikab_loss:
-
+        g_coeffs_to_fit.requires_grad_()
+        optimizer = torch.optim.AdamW([g_coeffs_to_fit], lr=lr)
+    
+        MSE_criterion = torch.nn.MSELoss()
+    
+        losses = np.zeros((epochs, 1))
+        g_coeffs_log = np.zeros((epochs + 1, *g_coeffs_to_fit.shape))
+        g_coeffs_log[0] = g_coeffs_to_fit.detach().cpu().numpy()
+    
+        alpha_zero = torch.tensor([0.0], device=device, requires_grad=True)
+    
+    
+        for epoch in tqdm(range(epochs)):
+    
+            optimizer.zero_grad() 
+    
+    
+            # clear cache because g_coeffs just changed last step
+            cumtrapz_cache.clear()
+    
+            # sample the whole batch of loc_alphas
+            loc_alphas = torch.distributions.Exponential(1 / 0.118).sample((batch_size,)).to(device)                      # (B,)
+    
+            # get the data pdf for the sampled loc_alphas for the entire batch
+            batch_data_pdf = get_pdf(loc_alphas, example=args.distribution, order=args.order_to_match)        # (B, nbins-1)
+    
+            # get taylor expansion ansatz for the batch
+            alpha_zero = torch.tensor(0.0, device=device, requires_grad=True)
+            fn = lambda a: q(t_bin_centers, a, g_coeffs_to_fit, mstar)
+            base = fn(alpha_zero)                                # (nbins-1,)
+    
+            if args.order_to_match >= 1:
+                _, d1 = torch.autograd.functional.jvp(fn,  (alpha_zero,), (torch.ones_like(alpha_zero),), create_graph=True)                         # (nbins-1,)
+            if args.order_to_match == 2:
+                d1_fn = lambda a: torch.autograd.functional.jvp(fn, (a,), (torch.ones_like(a),), create_graph=True)[1]
+                _, d2 = torch.autograd.functional.jvp(d1_fn, (alpha_zero,), (torch.ones_like(alpha_zero),), create_graph=True)                         # (nbins-1,)
+    
+            # construct the taylor expansion for the loc_alphas
+            batch_ansatz = base
+            if args.order_to_match >= 1:
+                batch_ansatz = batch_ansatz + loc_alphas[:, None] * d1
+            if args.order_to_match == 2:
+                batch_ansatz = batch_ansatz + 0.5 * (loc_alphas[:, None] ** 2) * d2
+    
+            # compute the loss
+            loss = MSE_criterion(batch_data_pdf.reshape(-1), batch_ansatz.reshape(-1))
+            loss.backward()
+            optimizer.step()
+    
+            losses[epoch] = loss.detach().cpu().numpy()
+            g_coeffs_log[epoch + 1] = g_coeffs_to_fit.detach().cpu().numpy()
+    
+            print(f"Epoch {epoch + 1}/{epochs}, Loss: {loss.item():.6e}")
+            
+    
+        return losses, g_coeffs_log
+    
+else:
+    def train(epochs, batch_size, lr):
+        
+        g_coeffs_to_fit.requires_grad_()
+        optimizer = torch.optim.AdamW([g_coeffs_to_fit], lr=lr)
+        MSE_criterion = torch.nn.MSELoss()
+        losses = np.zeros((epochs, 1))
+        g_coeffs_log = np.zeros((epochs + 1, *g_coeffs_to_fit.shape))
+        g_coeffs_log[0] = g_coeffs_to_fit.detach().cpu().numpy()
+        alpha_zero = torch.zeros(1, device=device, requires_grad=True)
+    
+        
+        for epoch in tqdm(range(epochs)):
+            optimizer.zero_grad()
+            # clear cache because g_coeffs just changed last step
+            cumtrapz_cache.clear()
+    
+          
             batch_data_pdf = torch.zeros(batch_size * (nbins - 1), device=device)
             batch_ansatz = torch.zeros(batch_size * (nbins - 1), device=device)
     
@@ -173,44 +234,19 @@ def train(epochs, batch_size, lr):
                     plt.savefig(f"plots/{epoch}.png")
                 """
 
-        elif args.use_rikab_loss:
 
-   
-            # sample the whole batch of loc_alphas
-            loc_alphas = torch.distributions.Exponential(1 / 0.118).sample((batch_size,)).to(device)                      # (B,)
-    
-            # get the data pdf for the sampled loc_alphas for the entire batch
-            batch_data_pdf = get_pdf(loc_alphas, example=args.distribution, order=args.order_to_match)        # (B, nbins-1)
-    
-            # get taylor expansion ansatz for the batch
-            alpha_zero = torch.tensor(0.0, device=device, requires_grad=True)
-            fn = lambda a: q(t_bin_centers, a, g_coeffs_to_fit, mstar)
-            base = fn(alpha_zero)                                # (nbins-1,)
-    
-            if args.order_to_match >= 1:
-                _, d1 = torch.autograd.functional.jvp(fn,  (alpha_zero,), (torch.ones_like(alpha_zero),), create_graph=True)                         # (nbins-1,)
-            if args.order_to_match == 2:
-                d1_fn = lambda a: torch.autograd.functional.jvp(fn, (a,), (torch.ones_like(a),), create_graph=True)[1]
-                _, d2 = torch.autograd.functional.jvp(d1_fn, (alpha_zero,), (torch.ones_like(alpha_zero),), create_graph=True)                         # (nbins-1,)
-    
-            # construct the taylor expansion for the loc_alphas
-            batch_ansatz = base
-            if args.order_to_match >= 1:
-                batch_ansatz = batch_ansatz + loc_alphas[:, None] * d1
-            if args.order_to_match == 2:
-                batch_ansatz = batch_ansatz + 0.5 * (loc_alphas[:, None] ** 2) * d2
-        
-        
             
-        loss = MSE_criterion(batch_data_pdf, batch_ansatz)
-        loss.backward()
-        optimizer.step()
-
-        losses[epoch] = loss.detach().cpu().numpy()
-        g_coeffs_log[epoch + 1] = g_coeffs_to_fit.detach().cpu().numpy()
-        print(f"Epoch {epoch + 1}/{epochs}, Loss: {loss.item():.6e}")
-
-    return losses, g_coeffs_log
+            
+                
+            loss = MSE_criterion(batch_data_pdf, batch_ansatz)
+            loss.backward()
+            optimizer.step()
+    
+            losses[epoch] = loss.detach().cpu().numpy()
+            g_coeffs_log[epoch + 1] = g_coeffs_to_fit.detach().cpu().numpy()
+            print(f"Epoch {epoch + 1}/{epochs}, Loss: {loss.item():.6e}")
+    
+        return losses, g_coeffs_log
 
 # Run training
 losses, g_coeffs_log = train(args.epochs, args.batch_size, args.lr)
