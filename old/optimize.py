@@ -4,7 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 import torch
-
+from torch.func import jacrev
 
 
 
@@ -15,7 +15,7 @@ parser.add_argument("-o", "--order_to_match", default=1, type=int)
 parser.add_argument("-name", "--name", default="test", type=str)
 parser.add_argument("-init_random", "--init_random", action="store_true")
 parser.add_argument("-e", "--epochs", default=1, type=int)
-parser.add_argument("-bs", "--batch_size", default=100, type=int)
+parser.add_argument("-bs", "--batch_size", default=512, type=int)
 parser.add_argument("-lr", "--lr", default=1e-3, type=float)
 args = parser.parse_args()
 
@@ -32,6 +32,17 @@ else:
     g_coeffs_to_fit = torch.tensor(np.array([[1, 0], [0, 0], [0, 0]]), device=device).float()
 
 
+# """ 
+# initial g:
+# 0.015901 0.016642
+# 0.086209 0.002081
+# 0.049107 0.028169
+# """
+
+# g_coeffs_to_fit = torch.tensor([[0.015901, 0.016642],
+#                                  [0.086209, 0.002081],
+#                                  [0.049107, 0.028169]], device=device).float()
+
 # Precompute factorials and ranges for vectorized operations
 max_M, max_N = g_coeffs_to_fit.shape
 factorial_cache_n = torch.tensor([math.factorial(k) for k in range(max_N)], device=device).float()  # shape (N,)
@@ -41,7 +52,7 @@ m_range = torch.arange(1, max_M, device=device)           # 1..M-1
 
 
 
-N_integrator = 500
+N_integrator = 250
 
 #  ansatz helper functions
 def f(t, alpha, g_coeffs, mstar):
@@ -113,22 +124,31 @@ elif args.distribution == "angularity":
 t_bins = torch.linspace(0, xlim, nbins)
 t_bin_centers = 0.5 * (t_bins[1:] + t_bins[:-1])
 
-def get_pdf(alpha, example="exponential", order=1):
+def get_pdf(alpha, *, example="exponential", order=1):
+
+
+    alpha = torch.as_tensor(alpha, device=t_bin_centers.device)[..., None]  
+
     if example == "exponential":
         if order == -1:
-            y = torch.tensor(alpha * torch.exp(-alpha * t_bin_centers))
+            y = alpha * torch.exp(-alpha * t_bin_centers)          # (B, nbins-1)
         elif order == 1:
-            y = alpha * torch.ones_like(t_bin_centers)
+            y = alpha.expand_as(alpha * t_bin_centers) * 0 + alpha 
         elif order == 2:
-            y = torch.tensor(alpha * (1 - alpha * t_bin_centers))
+            y = alpha * (1 - alpha * t_bin_centers)
     elif example == "angularity":
         if order == -1:
-            y = torch.tensor(alpha * t_bin_centers * torch.exp(-alpha * t_bin_centers ** 2 / 2.0))
+            y = alpha * t_bin_centers * torch.exp(-alpha * t_bin_centers**2 / 2)
         elif order == 1:
-            y = torch.tensor(alpha * t_bin_centers)
+            y = alpha * t_bin_centers
         elif order == 2:
-            y = torch.tensor(alpha * t_bin_centers * (1 - alpha * t_bin_centers ** 2 / 2.0))
-    return y
+            y = alpha * t_bin_centers * (1 - alpha * t_bin_centers**2 / 2)
+    else:
+        raise ValueError("bad example/order")
+    return y.squeeze(0) 
+
+
+
 
 
 # logging
@@ -155,7 +175,6 @@ def train(epochs, batch_size, lr):
     alpha_zero = torch.tensor([0.0], device=device, requires_grad=True)
 
 
-
     for epoch in tqdm(range(epochs)):
 
         optimizer.zero_grad() 
@@ -164,42 +183,40 @@ def train(epochs, batch_size, lr):
         # clear cache because g_coeffs just changed last step
         cumtrapz_cache.clear()
 
-        batch_data_pdf = torch.zeros(batch_size * (nbins - 1))
-        batch_ansatz = torch.zeros(batch_size * (nbins - 1))
+        # sample the whole batch of loc_alphas
+        loc_alphas = torch.distributions.Exponential(1 / 0.118).sample((batch_size,)).to(device)                      # (B,)
 
+        # get the data pdf for the sampled loc_alphas for the entire batch
+        batch_data_pdf = get_pdf(loc_alphas, example=args.distribution, order=args.order_to_match)        # (B, nbins-1)
 
+        # get taylor expansion ansatz for the batch
+        alpha_zero = torch.tensor(0.0, device=device, requires_grad=True)
+        fn = lambda a: q(t_bin_centers, a, g_coeffs_to_fit, mstar)
+        base = fn(alpha_zero)                                # (nbins-1,)
 
-        for bs in range(batch_size):
-            loc_alpha = torch.distributions.Exponential(1 / 0.118).sample()
+        if args.order_to_match >= 1:
+            _, d1 = torch.autograd.functional.jvp(fn,  (alpha_zero,), (torch.ones_like(alpha_zero),), create_graph=True)                         # (nbins-1,)
+        if args.order_to_match == 2:
+            d1_fn = lambda a: torch.autograd.functional.jvp(fn, (a,), (torch.ones_like(a),), create_graph=True)[1]
+            _, d2 = torch.autograd.functional.jvp(d1_fn, (alpha_zero,), (torch.ones_like(alpha_zero),), create_graph=True)                         # (nbins-1,)
 
-            # generate data PDF
-            with torch.no_grad():
-                loc_data_pdf = get_pdf(
-                    loc_alpha, example=args.distribution, order=args.order_to_match
-                )
+        # construct the taylor expansion for the loc_alphas
+        batch_ansatz = base
+        if args.order_to_match >= 1:
+            batch_ansatz = batch_ansatz + loc_alphas[:, None] * d1
+        if args.order_to_match == 2:
+            batch_ansatz = batch_ansatz + 0.5 * (loc_alphas[:, None] ** 2) * d2
 
-            batch_data_pdf[bs * (nbins - 1) : (bs + 1) * (nbins - 1)] = loc_data_pdf
-
-            for i, t in enumerate(t_bin_centers):
-
-                # 0th order
-                loc_ansatz = q(t, alpha_zero, g_coeffs_to_fit, mstar)
-
-                dx = loc_ansatz
-                for order in range(1, args.order_to_match + 1):
-                    dx = torch.autograd.grad(
-                        dx, alpha_zero, create_graph=True, retain_graph=True
-                    )[0]
-                    loc_ansatz += (loc_alpha ** order / math.factorial(order)) * dx
-
-                batch_ansatz[bs * (nbins - 1) + i] = loc_ansatz
-
-        loss = MSE_criterion(batch_data_pdf.float(), batch_ansatz.float())
+        # compute the loss
+        loss = MSE_criterion(batch_data_pdf.reshape(-1), batch_ansatz.reshape(-1))
         loss.backward()
         optimizer.step()
 
         losses[epoch] = loss.detach().cpu().numpy()
         g_coeffs_log[epoch + 1] = g_coeffs_to_fit.detach().cpu().numpy()
+
+        print(f"Epoch {epoch + 1}/{epochs}, Loss: {loss.item():.6e}")
+        
 
     return losses, g_coeffs_log
 
