@@ -166,19 +166,18 @@ if args.use_rikab_loss:
             if args.order_to_match >= 1:
                 batch_ansatz = batch_ansatz + loc_alphas[:, None] * d1
             if args.order_to_match == 2:
-                print(d2)
                 batch_ansatz = batch_ansatz + 0.5 * (loc_alphas[:, None] ** 2) * d2
     
 
-            #  plot the ansatz and data pdf for the first batch
-            if epoch % 10 == 0 or epoch == epochs - 1:
-                plt.figure()
-                plt.plot(t_bin_centers.detach().cpu().numpy(), batch_data_pdf[0].detach().cpu().numpy(), label="data")
-                plt.plot(t_bin_centers.detach().cpu().numpy(), batch_ansatz[0].detach().cpu().numpy(), label="ansatz, taylor expansion", ls="dotted")
-                plt.plot(t_bin_centers.detach().cpu().numpy(), fn(loc_alphas[0]).detach().cpu().numpy(), label="ansatz, full", ls="dashed")
-                plt.legend()
-                plt.title(f"Epoch {epoch + 1}, alpha={loc_alphas[0].item()}")
-                plt.savefig(f"plots/{outfile_name}_epoch_{epoch}.png")
+            # #  plot the ansatz and data pdf for the first batch
+            # if epoch % 10 == 0 or epoch == epochs - 1:
+            #     plt.figure()
+            #     plt.plot(t_bin_centers.detach().cpu().numpy(), batch_data_pdf[0].detach().cpu().numpy(), label="data")
+            #     plt.plot(t_bin_centers.detach().cpu().numpy(), batch_ansatz[0].detach().cpu().numpy(), label="ansatz, taylor expansion", ls="dotted")
+            #     plt.plot(t_bin_centers.detach().cpu().numpy(), fn(loc_alphas[0]).detach().cpu().numpy(), label="ansatz, full", ls="dashed")
+            #     plt.legend()
+            #     plt.title(f"Epoch {epoch + 1}, alpha={loc_alphas[0].item()}")
+            #     plt.savefig(f"plots/{outfile_name}_epoch_{epoch}.png")
 
             # compute the loss
             loss = MSE_criterion(batch_data_pdf.reshape(-1), batch_ansatz.reshape(-1))
@@ -230,16 +229,16 @@ else:
                         loc_ansatz += (loc_alpha ** order / math.factorial(order)) * dx
                     batch_ansatz[bs * (nbins - 1) + i] = loc_ansatz
 
-                # """
-                if bs == 0:
-                    plt.figure()
-                    plt.plot(t_bin_centers.detach().cpu().numpy(), loc_data_pdf.detach().cpu().numpy(), label = "data")
-                    plt.plot(t_bin_centers.detach().cpu().numpy(), batch_ansatz[:nbins-1].detach().cpu().numpy(), label = "ansatz, taylor expansion", ls ="dotted")
-                    plt.plot(t_bin_centers.detach().cpu().numpy(), [q(t, loc_alpha, g_coeffs_to_fit, mstar).detach().cpu().numpy() for tt in t_bin_centers], label = "ansatz, full", ls ="dashed")
-                    plt.legend()
-                    plt.title(loc_alpha)
-                    plt.savefig(f"plots/{epoch}.png")
-                # """
+                # # """
+                # if bs == 0:
+                #     plt.figure()
+                #     plt.plot(t_bin_centers.detach().cpu().numpy(), loc_data_pdf.detach().cpu().numpy(), label = "data")
+                #     plt.plot(t_bin_centers.detach().cpu().numpy(), batch_ansatz[:nbins-1].detach().cpu().numpy(), label = "ansatz, taylor expansion", ls ="dotted")
+                #     plt.plot(t_bin_centers.detach().cpu().numpy(), [q(t, loc_alpha, g_coeffs_to_fit, mstar).detach().cpu().numpy() for tt in t_bin_centers], label = "ansatz, full", ls ="dashed")
+                #     plt.legend()
+                #     plt.title(loc_alpha)
+                #     plt.savefig(f"plots/{epoch}.png")
+                # # """
 
 
             
