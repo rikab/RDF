@@ -6,7 +6,7 @@ from tqdm import tqdm
 import torch
 from torch.func import jacrev
 
-plt.style.use('/global/cfs/cdirs/m3246/rikab/dimuonAD/helpers/style_full_notex.mplstyle')
+# plt.style.use('/global/cfs/cdirs/m3246/rikab/dimuonAD/helpers/style_full_notex.mplstyle')
 
 parser = argparse.ArgumentParser()
 
@@ -67,18 +67,14 @@ def cumulative_trapezoidal(alpha, g_coeffs, mstar, t_grid):
     cum = torch.cat([torch.zeros(1, device=device), cum])
     return cum
 
-cumtrapz_cache = {}
 
 def q(t, alpha, g_coeffs, mstar):
-    alpha_key = float(alpha)
-    if alpha_key not in cumtrapz_cache:
-        t_dense = torch.linspace(0.0, xlim, N_integrator, device=device)
-        cumtrapz_cache[alpha_key] = (
-            t_dense,
-            cumulative_trapezoidal(alpha, g_coeffs, mstar, t_dense),
-        )
 
-    t_dense, F_dense = cumtrapz_cache[alpha_key]
+
+    t_dense = torch.linspace(0.0, xlim, N_integrator, device=device)
+    F_dense = cumulative_trapezoidal(alpha, g_coeffs, mstar, t_dense)
+
+    # Interpolate
     epsilon_regularization = 1e-12
     idx = torch.searchsorted(t_dense, t.clamp(max=t_dense[-1]), right=True) - 1
     idx = idx.clamp(min=0, max=t_dense.shape[0] - 2)
@@ -147,10 +143,7 @@ if args.use_rikab_loss:
     
             optimizer.zero_grad() 
     
-    
-            # clear cache because g_coeffs just changed last step
-            cumtrapz_cache.clear()
-    
+        
             # sample the whole batch of loc_alphas
             loc_alphas = torch.distributions.Exponential(1 / 0.118).sample((batch_size,)).to(device)                      # (B,)
     
@@ -173,8 +166,20 @@ if args.use_rikab_loss:
             if args.order_to_match >= 1:
                 batch_ansatz = batch_ansatz + loc_alphas[:, None] * d1
             if args.order_to_match == 2:
+                print(d2)
                 batch_ansatz = batch_ansatz + 0.5 * (loc_alphas[:, None] ** 2) * d2
     
+
+            #  plot the ansatz and data pdf for the first batch
+            if epoch % 10 == 0 or epoch == epochs - 1:
+                plt.figure()
+                plt.plot(t_bin_centers.detach().cpu().numpy(), batch_data_pdf[0].detach().cpu().numpy(), label="data")
+                plt.plot(t_bin_centers.detach().cpu().numpy(), batch_ansatz[0].detach().cpu().numpy(), label="ansatz, taylor expansion", ls="dotted")
+                plt.plot(t_bin_centers.detach().cpu().numpy(), fn(loc_alphas[0]).detach().cpu().numpy(), label="ansatz, full", ls="dashed")
+                plt.legend()
+                plt.title(f"Epoch {epoch + 1}, alpha={loc_alphas[0].item()}")
+                plt.savefig(f"plots/{outfile_name}_epoch_{epoch}.png")
+
             # compute the loss
             loss = MSE_criterion(batch_data_pdf.reshape(-1), batch_ansatz.reshape(-1))
             loss.backward()
@@ -185,6 +190,8 @@ if args.use_rikab_loss:
     
             print(f"Epoch {epoch + 1}/{epochs}, Loss: {loss.item():.6e}")
             
+
+            #
     
         return losses, g_coeffs_log
     
@@ -223,16 +230,16 @@ else:
                         loc_ansatz += (loc_alpha ** order / math.factorial(order)) * dx
                     batch_ansatz[bs * (nbins - 1) + i] = loc_ansatz
 
-                """
+                # """
                 if bs == 0:
                     plt.figure()
                     plt.plot(t_bin_centers.detach().cpu().numpy(), loc_data_pdf.detach().cpu().numpy(), label = "data")
-                    plt.plot(t_bin_centers.detach().cpu().numpy(), batch_ansatz[:nbins-1].detach().cpu().numpy(), label = "ansatz, taylor expansion")
-                    plt.plot(t_bin_centers.detach().cpu().numpy(), [q(t, loc_alpha, g_coeffs_to_fit, mstar).detach().cpu().numpy() for tt in t_bin_centers], label = "ansatz, full")
+                    plt.plot(t_bin_centers.detach().cpu().numpy(), batch_ansatz[:nbins-1].detach().cpu().numpy(), label = "ansatz, taylor expansion", ls ="dotted")
+                    plt.plot(t_bin_centers.detach().cpu().numpy(), [q(t, loc_alpha, g_coeffs_to_fit, mstar).detach().cpu().numpy() for tt in t_bin_centers], label = "ansatz, full", ls ="dashed")
                     plt.legend()
                     plt.title(loc_alpha)
                     plt.savefig(f"plots/{epoch}.png")
-                """
+                # """
 
 
             
