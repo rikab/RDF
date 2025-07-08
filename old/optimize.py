@@ -7,7 +7,6 @@ import torch
 from torch.func import jacrev
 
 plt.style.use('/global/cfs/cdirs/m3246/rikab/dimuonAD/helpers/style_full_notex.mplstyle')
-use_rikab_loss = True
 
 parser = argparse.ArgumentParser()
 
@@ -22,13 +21,15 @@ parser.add_argument("-lr", "--lr", default=1e-3, type=float)
 parser.add_argument("-s", "--seed", default=42, type=int)
 parser.add_argument("-m", "--m", default=3, type=int)
 parser.add_argument("-n", "--n", default=3, type=int)
+parser.add_argument("-use_rikab_loss", "--use_rikab_loss", action="store_true")
+
 
 
 args = parser.parse_args()
 
 outfile_name = f"{args.distribution}_{args.order_to_match}_{args.name}"
 
-device = "cpu"#torch.device("cuda" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 torch.manual_seed(args.seed)
 np.random.seed(args.seed)
 
@@ -142,7 +143,7 @@ def train(epochs, batch_size, lr):
         cumtrapz_cache.clear()
 
         # RADHA LOSS
-        if not use_rikab_loss:
+        if not args.use_rikab_loss:
 
             batch_data_pdf = torch.zeros(batch_size * (nbins - 1), device=device)
             batch_ansatz = torch.zeros(batch_size * (nbins - 1), device=device)
@@ -160,7 +161,8 @@ def train(epochs, batch_size, lr):
                         dx = torch.autograd.grad(dx, alpha_zero, create_graph=True, retain_graph=True)[0]
                         loc_ansatz += (loc_alpha ** order / math.factorial(order)) * dx
                     batch_ansatz[bs * (nbins - 1) + i] = loc_ansatz
-    
+
+                """
                 if bs == 0:
                     plt.figure()
                     plt.plot(t_bin_centers.detach().cpu().numpy(), loc_data_pdf.detach().cpu().numpy(), label = "data")
@@ -169,8 +171,9 @@ def train(epochs, batch_size, lr):
                     plt.legend()
                     plt.title(loc_alpha)
                     plt.savefig(f"plots/{epoch}.png")
+                """
 
-        elif use_rikab_loss:
+        elif args.use_rikab_loss:
 
    
             # sample the whole batch of loc_alphas
