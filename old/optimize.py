@@ -203,6 +203,10 @@ def train(epochs, batch_size, lr):
         # compute the loss
         loss = MSE_criterion(batch_data_pdf.reshape(-1), batch_ansatz.reshape(-1))
         loss.backward()
+
+        # this strictly makes things worse??
+        #torch.nn.utils.clip_grad_norm_(g_coeffs_to_fit, max_norm = 2.0)
+
         optimizer.step()
 
         losses[epoch] = loss.detach().cpu().numpy()
@@ -218,30 +222,31 @@ def train(epochs, batch_size, lr):
 # Run training
 losses, g_coeffs_log = train(args.epochs, args.batch_size, args.lr)
 
-# Plot loss
-plt.figure()
-plt.plot(losses, label="MSE loss")
-plt.legend()
-plt.yscale("log")
-plt.xlabel("Epoch")
-plt.savefig(f"plots/{outfile_name}_loss.png")
 
+
+
+# Plot loss
+fig, ax = plt.subplots(1,3, figsize = (24, 6))
+
+
+ax[0].plot(losses, label="MSE loss")
+ax[0].legend()
+ax[0].set_yscale("log")
+ax[0].set_xlabel("Epoch")
 
 
 
 from matplotlib.pyplot import cm
 color = iter(cm.hsv(np.linspace(0, 1, g_coeffs_log.shape[1]*g_coeffs_log.shape[2])))
 
-plt.figure()
 for m in range(g_coeffs_log.shape[1]):
     for n in range(g_coeffs_log.shape[2]):
         c = next(color)
         label = f"$g_{{{m}{n}}}$"
-        plt.plot(g_coeffs_log[:, m, n], label=label, color=c)
-plt.legend()
-plt.xlabel("Epoch")
-plt.ylabel("Coefficient value")
-plt.savefig(f"plots/{outfile_name}_coefficients.png")
+        ax[1].plot(g_coeffs_log[:, m, n], label=label, color=c)
+ax[1].legend()
+ax[1].set_xlabel("Epoch")
+ax[1].set_ylabel("Coefficient value")
 
 
 
@@ -249,18 +254,17 @@ tt = torch.linspace(0, xlim, 200, device=device)
 colors = ["red", "purple", "blue"]
 
 
-plt.figure()
 for i, alpha in enumerate([0.15, 0.1, 0.05]):
     alpha_tensor = torch.tensor(alpha, device=device)
-    plt.plot( t_bin_centers.detach().cpu().numpy(),  get_pdf(alpha_tensor, example=args.distribution, order=-1).detach().cpu().numpy(), label="Target (exact)",  color=colors[i],  linestyle="dashed" )
-    plt.scatter(  t_bin_centers.detach().cpu().numpy(), get_pdf(alpha_tensor, example=args.distribution, order=args.order_to_match).detach().cpu().numpy(), label=f"Target (order $\\alpha^{args.order_to_match}$)", color=colors[i], s=0.8)
-    plt.plot(tt.detach().cpu().numpy(), q(tt, alpha_tensor, g_coeffs_to_fit, mstar).detach().cpu().numpy(), label="Ansatz", color=colors[i])
+    ax[2].plot( t_bin_centers.detach().cpu().numpy(),  get_pdf(alpha_tensor, example=args.distribution, order=-1).detach().cpu().numpy(), label="Target (exact)",  color=colors[i],  linestyle="dashed" )
+    ax[2].scatter(  t_bin_centers.detach().cpu().numpy(), get_pdf(alpha_tensor, example=args.distribution, order=args.order_to_match).detach().cpu().numpy(), label=f"Target (order $\\alpha^{args.order_to_match}$)", color=colors[i], s=0.8)
+    ax[2].plot(tt.detach().cpu().numpy(), q(tt, alpha_tensor, g_coeffs_to_fit, mstar).detach().cpu().numpy(), label="Ansatz", color=colors[i])
 
-plt.legend()
-plt.xlabel("$t$")
-plt.ylabel("Density")
-plt.ylim(-0.01, 0.4)
-plt.savefig(f"plots/{outfile_name}_results.png")
+ax[2].legend()
+ax[2].set_xlabel("$t$")
+ax[2].set_ylabel("Density")
+ax[2].set_ylim(-0.01, 0.4)
+plt.savefig(f"plots/{outfile_name}_results.png", bbox_inches = 'tight')
 
 ofile.write("final g:\n")
 np.savetxt(ofile, g_coeffs_to_fit.detach().cpu().numpy())
