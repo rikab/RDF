@@ -155,7 +155,7 @@ def train(epochs, batch_size, lr):
 
     g_coeffs_to_fit.requires_grad_()
     optimizer = torch.optim.AdamW([g_coeffs_to_fit], lr=lr)
-    scheduler = ExponentialLR(optimizer, gamma = 0.9999)
+    scheduler = ExponentialLR(optimizer, gamma = 0.999)
 
     MSE_criterion = torch.nn.MSELoss()
 
@@ -247,10 +247,10 @@ ax[0].set_xlabel("Epoch")
 
 
 
-ax[1].plot(lrs, label="MSE loss")
+ax[1].plot(lrs, label="LR")
 ax[1].legend()
 ax[1].set_yscale("log")
-ax[1].set_xlabel("LR")
+ax[1].set_xlabel("Epoch")
 
 
 from matplotlib.pyplot import cm
