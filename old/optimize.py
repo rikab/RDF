@@ -7,6 +7,8 @@ import torch
 from torch.func import jacrev
 import pickle
 
+from torch.optim.lr_scheduler import ReduceLROnPlateau, ExponentialLR
+
 plt.style.use('/global/cfs/cdirs/m3246/rikab/dimuonAD/helpers/style_full_notex.mplstyle')
 
 parser = argparse.ArgumentParser()
@@ -28,6 +30,7 @@ parser.add_argument("-m", "--m", default=4, type=int)
 parser.add_argument("-n", "--n", default=4, type=int)
 
 
+mstar = 1
 
 args = parser.parse_args()
 
@@ -39,14 +42,17 @@ torch.manual_seed(args.seed)
 np.random.seed(args.seed)
 
 
+g_coeffs_to_fit = torch.zeros((args.m, args.n), device=device)
+
 if args.init_random:
-    g_coeffs_to_fit = 0.1 * torch.rand(size=(args.m, args.n), device=device).float()
+    for m in range(args.m):
+        for n in range(args.n):
+            g_coeffs_to_fit[m,n] = 1.0 / (math.factorial(m+1+mstar)*math.factorial(n+1))
     outfile_name += "_init_random"
 
     
 elif args.init_at_answer:
     outfile_name += "_init_at_answer"
-    g_coeffs_to_fit = torch.zeros((args.m, args.n), device=device)
     if args.distribution == "exponential":
         g_coeffs_to_fit[0, 0] = 1
     elif args.distribution == "angularity":
@@ -55,7 +61,6 @@ elif args.init_at_answer:
         
 elif args.init_close_to_answer:
     outfile_name += "_init_close_to_answer"
-    g_coeffs_to_fit = torch.zeros((args.m, args.n), device=device)
     if args.distribution == "exponential":
         g_coeffs_to_fit[0, 0] = 0.9
     elif args.distribution == "angularity":
@@ -139,7 +144,7 @@ def get_pdf(alpha, *, example="exponential", order=1):
     #y[y < 0] = 0
     return y.squeeze(0)
 
-mstar = 1
+
 ofile = open(f"data/{outfile_name}_g_coeffs.txt", "w")
 ofile.write(f"Epochs: {args.epochs}\nLearning rate: {args.lr}\nBatch size: {args.batch_size}\n\n")
 ofile.write("initial g:\n")
@@ -150,10 +155,12 @@ def train(epochs, batch_size, lr):
 
     g_coeffs_to_fit.requires_grad_()
     optimizer = torch.optim.AdamW([g_coeffs_to_fit], lr=lr)
+    scheduler = ExponentialLR(optimizer, gamma = 0.9999)
 
     MSE_criterion = torch.nn.MSELoss()
 
     losses = np.zeros((epochs, 1))
+    lrs = np.zeros((epochs, 1))
     g_coeffs_log = np.zeros((epochs + 1, *g_coeffs_to_fit.shape))
     g_coeffs_log[0] = g_coeffs_to_fit.detach().cpu().numpy()
 
@@ -209,7 +216,11 @@ def train(epochs, batch_size, lr):
 
         optimizer.step()
 
+        # technically we should call the val loss...
+        scheduler.step()
+
         losses[epoch] = loss.detach().cpu().numpy()
+        lrs[epoch] = scheduler.get_lr()[0]
         g_coeffs_log[epoch + 1] = g_coeffs_to_fit.detach().cpu().numpy()
 
         #print(f"Epoch {epoch + 1}/{epochs}, Loss: {loss.item():.6e}")
@@ -217,16 +228,16 @@ def train(epochs, batch_size, lr):
 
         #
 
-    return losses, g_coeffs_log
+    return losses, lrs, g_coeffs_log
 
 # Run training
-losses, g_coeffs_log = train(args.epochs, args.batch_size, args.lr)
+losses, lrs, g_coeffs_log = train(args.epochs, args.batch_size, args.lr)
 
 
 
 
 # Plot loss
-fig, ax = plt.subplots(1,3, figsize = (24, 6))
+fig, ax = plt.subplots(1, 4, figsize = (24, 6))
 
 
 ax[0].plot(losses, label="MSE loss")
@@ -236,6 +247,12 @@ ax[0].set_xlabel("Epoch")
 
 
 
+ax[1].plot(lrs, label="MSE loss")
+ax[1].legend()
+ax[1].set_yscale("log")
+ax[1].set_xlabel("LR")
+
+
 from matplotlib.pyplot import cm
 color = iter(cm.hsv(np.linspace(0, 1, g_coeffs_log.shape[1]*g_coeffs_log.shape[2])))
 
@@ -243,10 +260,10 @@ for m in range(g_coeffs_log.shape[1]):
     for n in range(g_coeffs_log.shape[2]):
         c = next(color)
         label = f"$g_{{{m}{n}}}$"
-        ax[1].plot(g_coeffs_log[:, m, n], label=label, color=c)
-ax[1].legend()
-ax[1].set_xlabel("Epoch")
-ax[1].set_ylabel("Coefficient value")
+        ax[2].plot(g_coeffs_log[:, m, n], label=label, color=c)
+ax[2].legend()
+ax[2].set_xlabel("Epoch")
+ax[2].set_ylabel("Coefficient value")
 
 
 
@@ -256,14 +273,14 @@ colors = ["red", "purple", "blue"]
 
 for i, alpha in enumerate([0.15, 0.1, 0.05]):
     alpha_tensor = torch.tensor(alpha, device=device)
-    ax[2].plot( t_bin_centers.detach().cpu().numpy(),  get_pdf(alpha_tensor, example=args.distribution, order=-1).detach().cpu().numpy(), label="Target (exact)",  color=colors[i],  linestyle="dashed" )
-    ax[2].scatter(  t_bin_centers.detach().cpu().numpy(), get_pdf(alpha_tensor, example=args.distribution, order=args.order_to_match).detach().cpu().numpy(), label=f"Target (order $\\alpha^{args.order_to_match}$)", color=colors[i], s=0.8)
-    ax[2].plot(tt.detach().cpu().numpy(), q(tt, alpha_tensor, g_coeffs_to_fit, mstar).detach().cpu().numpy(), label="Ansatz", color=colors[i])
+    ax[3].plot( t_bin_centers.detach().cpu().numpy(),  get_pdf(alpha_tensor, example=args.distribution, order=-1).detach().cpu().numpy(), label="Target (exact)",  color=colors[i],  linestyle="dashed" )
+    ax[3].scatter(  t_bin_centers.detach().cpu().numpy(), get_pdf(alpha_tensor, example=args.distribution, order=args.order_to_match).detach().cpu().numpy(), label=f"Target (order $\\alpha^{args.order_to_match}$)", color=colors[i], s=0.8)
+    ax[3].plot(tt.detach().cpu().numpy(), q(tt, alpha_tensor, g_coeffs_to_fit, mstar).detach().cpu().numpy(), label="Ansatz", color=colors[i])
 
-ax[2].legend()
-ax[2].set_xlabel("$t$")
-ax[2].set_ylabel("Density")
-ax[2].set_ylim(-0.01, 0.4)
+ax[3].legend()
+ax[3].set_xlabel("$t$")
+ax[3].set_ylabel("Density")
+ax[3].set_ylim(-0.01, 0.4)
 plt.savefig(f"plots/{outfile_name}_results.png", bbox_inches = 'tight')
 
 ofile.write("final g:\n")
@@ -273,6 +290,7 @@ ofile.close()
 
 save_dict = {}
 save_dict["loss"] = losses
+save_dict["lrs"] = lrs
 save_dict["g_coeffs"] = g_coeffs_log
 with open(f"data/{outfile_name}", "wb") as ofile:
     pickle.dump(save_dict, ofile)
