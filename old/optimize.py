@@ -21,6 +21,8 @@ parser.add_argument("-name", "--name", default="test", type=str)
 parser.add_argument("-init_random", "--init_random", action="store_true")
 parser.add_argument("-init_at_answer", "--init_at_answer", action="store_true")
 parser.add_argument("-init_close_to_answer", "--init_close_to_answer", action="store_true")
+parser.add_argument("-ratio", "--ratio_loss", action="store_true")
+
 
 parser.add_argument("-e", "--epochs", default=1, type=int)
 parser.add_argument("-bs", "--batch_size", default=512, type=int)
@@ -42,7 +44,37 @@ torch.manual_seed(args.seed)
 np.random.seed(args.seed)
 
 
+    
+nbins = 80
+xlim_dict = {
+    "exponential": 20,
+    "angularity": 15,
+    "thrust": 1, 
+    "c_parameter": 1, 
+}
+
+if args.distribution in ["exponential", "angularity"]:
+    run_toy = True
+
+elif args.distribution in ["thrust", "c_parameter"]:
+    run_toy = False
+    with open("event_records_LO.pkl", "rb") as ifile:
+        data_dir = pickle.load(ifile)
+    allowed_alphas = data_dir.keys()
+
+else:
+    print("Must choose a valid distribution")
+    exit()
+
+
+xlim = xlim_dict[args.distribution]
+t_bins = torch.linspace(0, xlim, nbins, device=device)
+t_bin_centers = 0.5 * (t_bins[1:] + t_bins[:-1])
+
+
+
 g_coeffs_to_fit = torch.zeros((args.m, args.n), device=device)
+
 
 if args.init_random:
     for m in range(args.m):
@@ -57,7 +89,7 @@ elif args.init_at_answer:
         g_coeffs_to_fit[0, 0] = 1
     elif args.distribution == "angularity":
         g_coeffs_to_fit[0, 1] = 1
-        
+   
         
 elif args.init_close_to_answer:
     outfile_name += "_init_close_to_answer"
@@ -70,6 +102,8 @@ elif args.init_close_to_answer:
 else:
     print("Must choose initialization!")
     sys.exit()
+    
+
 
 max_M, max_N = g_coeffs_to_fit.shape
 factorial_cache_n = torch.tensor([math.factorial(k) for k in range(max_N)], device=device).float()
@@ -112,18 +146,7 @@ def q(t, alpha, g_coeffs, mstar):
     return f(t, alpha, g_coeffs, mstar) * torch.exp(-exp_term)
 
 
-    
-nbins = 80
-
-if args.distribution == "exponential":
-    xlim = 20
-else:
-    xlim = 15
-
-t_bins = torch.linspace(0, xlim, nbins, device=device)
-t_bin_centers = 0.5 * (t_bins[1:] + t_bins[:-1])
-
-def get_pdf(alpha, *, example="exponential", order=1):
+def get_pdf_toys(alpha, *, example="exponential", order=1):
     alpha = torch.as_tensor(alpha, device=device)[..., None]
     if example == "exponential":
         if order == -1:
@@ -145,6 +168,17 @@ def get_pdf(alpha, *, example="exponential", order=1):
     return y.squeeze(0)
 
 
+def get_pdf_data(alpha, *, example="thrust"):
+
+    data = data_dir[alpha][example]
+    if example == "thrust":
+        data = [1.0 - x for x in data]
+    y, _ = np.histogram(data, bins = t_bins, density = True)
+    y = torch.tensor(y, device = device).reshape(-1, 1)
+
+    return y.squeeze(0)
+
+    
 ofile = open(f"data/{outfile_name}_g_coeffs.txt", "w")
 ofile.write(f"Epochs: {args.epochs}\nLearning rate: {args.lr}\nBatch size: {args.batch_size}\n\n")
 ofile.write("initial g:\n")
@@ -155,7 +189,7 @@ def train(epochs, batch_size, lr):
 
     g_coeffs_to_fit.requires_grad_()
     optimizer = torch.optim.AdamW([g_coeffs_to_fit], lr=lr)
-    scheduler = ExponentialLR(optimizer, gamma = 0.999)
+    scheduler = ExponentialLR(optimizer, gamma = 1)
 
     MSE_criterion = torch.nn.MSELoss()
 
@@ -166,6 +200,10 @@ def train(epochs, batch_size, lr):
 
     alpha_zero = torch.tensor([0.0], device=device, requires_grad=True)
 
+    if not run_toy: # only needs to be done once
+        data_pdf = [get_pdf_data(a, example=args.distribution) for a in allowed_alphas]
+        batch_data_pdf = torch.cat(data_pdf, axis = 1).T
+        loc_alphas =  torch.tensor([0.001*float(a.split("_")[1]) for a in allowed_alphas], device  = device).to(float).reshape(-1,)
 
     for epoch in tqdm(range(epochs)):
 
@@ -173,10 +211,19 @@ def train(epochs, batch_size, lr):
 
     
         # sample the whole batch of loc_alphas
-        loc_alphas = torch.distributions.Exponential(1 / 0.118).sample((batch_size,)).to(device)                      # (B,)
+        if run_toy:
+            if False:
+                loc_alphas = torch.distributions.Exponential(1 / 0.118).sample((batch_size,)).to(device)                      # (B,)
+                loc_alphas = torch.clamp(loc_alphas, min = 0, max = 4*np.pi)
+            else:
+                loc_alphas = torch.distributions.uniform.Uniform(low = 1e-8, high = 1).sample((batch_size,)).to(device)    
+                loc_alphas = 1.0 - torch.sqrt(1.0 - loc_alphas)
 
-        # get the data pdf for the sampled loc_alphas for the entire batch
-        batch_data_pdf = get_pdf(loc_alphas, example=args.distribution, order=args.order_to_match)        # (B, nbins-1)
+            # get the data pdf for the sampled loc_alphas for the entire batch
+            batch_data_pdf = get_pdf_toy(loc_alphas, example=args.distribution, order=args.order_to_match)        # (B, nbins-1)
+            
+        else:
+            pass
 
         # get taylor expansion ansatz for the batch
         alpha_zero = torch.tensor(0.0, device=device, requires_grad=True)
@@ -208,7 +255,38 @@ def train(epochs, batch_size, lr):
         #     plt.savefig(f"plots/{outfile_name}_epoch_{epoch}.png")
 
         # compute the loss
-        loss = MSE_criterion(batch_data_pdf.reshape(-1), batch_ansatz.reshape(-1))
+
+        batch_data_pdf = batch_data_pdf.reshape(-1)
+        batch_ansatz = batch_ansatz.reshape(-1)
+
+        
+        if args.ratio_loss:
+            eps = 1e-12
+            """
+            
+            log_p = torch.log(torch.abs(batch_data_pdf)  + eps)
+            log_q = torch.log(torch.abs(batch_ansatz) + eps)
+            
+            
+            # Add i*pi to the log of the negative values
+            log_p = log_p + 1j * np.pi * (batch_data_pdf < 0)
+            log_q = log_q + 1j * np.pi * (batch_ansatz < 0)
+
+        
+            # Take the magnitude of the difference
+            diff = torch.abs(log_p - log_q)**2
+            loss = torch.mean(torch.nan_to_num(diff))
+            """
+            ratio = batch_data_pdf / batch_ansatz
+
+            loss = torch.pow(torch.log(torch.abs(ratio) ), 2) +  np.pi**2 * (ratio  < 0)
+            loss = torch.mean(loss)
+
+        else:
+            loss = MSE_criterion(batch_data_pdf, batch_ansatz)
+
+
+            
         loss.backward()
 
         # this strictly makes things worse??
@@ -237,20 +315,16 @@ losses, lrs, g_coeffs_log = train(args.epochs, args.batch_size, args.lr)
 
 
 # Plot loss
-fig, ax = plt.subplots(1, 4, figsize = (24, 6))
+fig, ax = plt.subplots(1, 3, figsize = (24, 6))
 
-
-ax[0].plot(losses, label="MSE loss")
+if args.ratio_loss:
+    ax[0].plot(losses, label="ratio loss")
+else:
+    ax[0].plot(losses, label="MSE loss")
 ax[0].legend()
 ax[0].set_yscale("log")
 ax[0].set_xlabel("Epoch")
 
-
-
-ax[1].plot(lrs, label="LR")
-ax[1].legend()
-ax[1].set_yscale("log")
-ax[1].set_xlabel("Epoch")
 
 
 from matplotlib.pyplot import cm
@@ -260,10 +334,10 @@ for m in range(g_coeffs_log.shape[1]):
     for n in range(g_coeffs_log.shape[2]):
         c = next(color)
         label = f"$g_{{{m}{n}}}$"
-        ax[2].plot(g_coeffs_log[:, m, n], label=label, color=c)
-ax[2].legend()
-ax[2].set_xlabel("Epoch")
-ax[2].set_ylabel("Coefficient value")
+        ax[1].plot(g_coeffs_log[:, m, n], label=label, color=c)
+ax[1].legend()
+ax[1].set_xlabel("Epoch")
+ax[1].set_ylabel("Coefficient value")
 
 
 
@@ -271,16 +345,26 @@ tt = torch.linspace(0, xlim, 200, device=device)
 colors = ["red", "purple", "blue"]
 
 
+
 for i, alpha in enumerate([0.15, 0.1, 0.05]):
     alpha_tensor = torch.tensor(alpha, device=device)
-    ax[3].plot( t_bin_centers.detach().cpu().numpy(),  get_pdf(alpha_tensor, example=args.distribution, order=-1).detach().cpu().numpy(), label="Target (exact)",  color=colors[i],  linestyle="dashed" )
-    ax[3].scatter(  t_bin_centers.detach().cpu().numpy(), get_pdf(alpha_tensor, example=args.distribution, order=args.order_to_match).detach().cpu().numpy(), label=f"Target (order $\\alpha^{args.order_to_match}$)", color=colors[i], s=0.8)
-    ax[3].plot(tt.detach().cpu().numpy(), q(tt, alpha_tensor, g_coeffs_to_fit, mstar).detach().cpu().numpy(), label="Ansatz", color=colors[i])
+    ax[2].plot(tt.detach().cpu().numpy(), q(tt, alpha_tensor, g_coeffs_to_fit, mstar).detach().cpu().numpy(), label="Ansatz", color=colors[i])
 
-ax[3].legend()
-ax[3].set_xlabel("$t$")
-ax[3].set_ylabel("Density")
-ax[3].set_ylim(-0.01, 0.4)
+    if run_toy:
+        ax[2].plot( t_bin_centers.detach().cpu().numpy(),  get_pdf_toy(alpha_tensor, example=args.distribution, order=-1).detach().cpu().numpy(), label="Target (exact)",  color=colors[i],  linestyle="dashed" )
+        ax[2].scatter(  t_bin_centers.detach().cpu().numpy(), get_pdf_toy(alpha_tensor, example=args.distribution, order=args.order_to_match).detach().cpu().numpy(), label=f"Target (order $\\alpha^{args.order_to_match}$)", color=colors[i], s=0.8)
+    else:
+        alpha_string = "alpha_"+str(int(1000*alpha)).zfill(4)
+        ax[2].plot( t_bin_centers.detach().cpu().numpy(),  get_pdf_data(alpha_string, example=args.distribution).detach().cpu().numpy(), label="Target (exact)",  color=colors[i],  linestyle="dashed" )
+    
+
+    
+   
+
+ax[2].legend()
+ax[2].set_xlabel("$t$")
+ax[2].set_ylabel("Density")
+#ax[2].set_ylim(-0.01, 0.4)
 plt.savefig(f"plots/{outfile_name}_results.png", bbox_inches = 'tight')
 
 ofile.write("final g:\n")
