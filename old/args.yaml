@@ -1,0 +1,19 @@
+distribution: thrust
+order_to_match: 1
+name: test
+
+init_random: true
+init_at_answer: false
+init_close_to_answer: false
+
+ratio_loss: false
+use_logbins: false
+n_bins: 50
+
+epochs: 1
+batch_size: 128
+lr: 0.1
+seed: 42
+m: 4
+n: 4
+

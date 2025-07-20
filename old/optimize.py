@@ -1,4 +1,5 @@
 import argparse
+import yaml
 import math
 import numpy as np
 import matplotlib.pyplot as plt
@@ -11,30 +12,26 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau, ExponentialLR
 
 plt.style.use('/global/cfs/cdirs/m3246/rikab/dimuonAD/helpers/style_full_notex.mplstyle')
 
-parser = argparse.ArgumentParser()
 
 
-parser.add_argument("-dist", "--distribution", default="exponential", type=str)
-parser.add_argument("-o", "--order_to_match", default=1, type=int)
-parser.add_argument("-name", "--name", default="test", type=str)
+def parse_args_dynamic(defaults):
+    parser = argparse.ArgumentParser(description="Dynamic YAML to argparse")
 
-parser.add_argument("-init_random", "--init_random", action="store_true")
-parser.add_argument("-init_at_answer", "--init_at_answer", action="store_true")
-parser.add_argument("-init_close_to_answer", "--init_close_to_answer", action="store_true")
-parser.add_argument("-ratio", "--ratio_loss", action="store_true")
+    for key, value in defaults.items():
+        arg_type = type(value)
+        parser.add_argument(f"--{key}", type=arg_type, default=value)
 
-
-parser.add_argument("-e", "--epochs", default=1, type=int)
-parser.add_argument("-bs", "--batch_size", default=512, type=int)
-parser.add_argument("-lr", "--lr", default=1e-3, type=float)
-parser.add_argument("-s", "--seed", default=42, type=int)
-parser.add_argument("-m", "--m", default=4, type=int)
-parser.add_argument("-n", "--n", default=4, type=int)
+    return parser.parse_args()
 
 
 mstar = 1
 
-args = parser.parse_args()
+
+with open("args.yaml", "r") as ifile:
+    config = yaml.safe_load(ifile)
+
+args = parse_args_dynamic(config)
+
 
 outfile_name = f"{args.distribution}_{args.order_to_match}_{args.name}"
 
@@ -45,11 +42,11 @@ np.random.seed(args.seed)
 
 
     
-nbins = 80
+
 xlim_dict = {
     "exponential": 20,
     "angularity": 15,
-    "thrust": 1, 
+    "thrust": 0.8, 
     "c_parameter": 1, 
 }
 
@@ -58,9 +55,6 @@ if args.distribution in ["exponential", "angularity"]:
 
 elif args.distribution in ["thrust", "c_parameter"]:
     run_toy = False
-    with open("event_records_LO.pkl", "rb") as ifile:
-        data_dir = pickle.load(ifile)
-    allowed_alphas = data_dir.keys()
 
 else:
     print("Must choose a valid distribution")
@@ -68,8 +62,13 @@ else:
 
 
 xlim = xlim_dict[args.distribution]
-t_bins = torch.linspace(0, xlim, nbins, device=device)
-t_bin_centers = 0.5 * (t_bins[1:] + t_bins[:-1])
+
+if args.use_logbins:
+    t_bins = torch.logspace(-1, np.log10(xlim), args.n_bins, device=device)
+    t_bin_centers = torch.sqrt( (t_bins[1:] * t_bins[:-1]))
+else:
+    t_bins = torch.linspace(0, xlim, args.n_bins, device=device)
+    t_bin_centers = 0.5 * (t_bins[1:] + t_bins[:-1])
 
 
 
@@ -168,21 +167,31 @@ def get_pdf_toys(alpha, *, example="exponential", order=1):
     return y.squeeze(0)
 
 
-def get_pdf_data(alpha, *, example="thrust"):
+def read_in_data(file_indices, example, t_bins):
 
-    data = data_dir[alpha][example]
-    if example == "thrust":
-        data = [1.0 - x for x in data]
-    y, _ = np.histogram(data, bins = t_bins, density = True)
-    y = torch.tensor(y, device = device).reshape(-1, 1)
+    data_dict = {}
 
-    return y.squeeze(0)
+    for i in file_indices:
+        with open(f"event_records_LO_{i}.pkl", "rb") as ifile:
+            loc_data_dict = pickle.load(ifile)
+            for alpha in loc_data_dict.keys():
+                loc_data = loc_data_dict[alpha][example]
+                if example == "thrust":
+                    loc_data = [2.0*(1.0 - x) for x in loc_data]
+                y, _ = np.histogram(loc_data, bins = t_bins, density = True)
+                y = torch.tensor(y, device = device).reshape(-1, 1)
+                data_dict[alpha] = y.squeeze(0).float()
+
+    return data_dict
 
     
 ofile = open(f"data/{outfile_name}_g_coeffs.txt", "w")
 ofile.write(f"Epochs: {args.epochs}\nLearning rate: {args.lr}\nBatch size: {args.batch_size}\n\n")
 ofile.write("initial g:\n")
 np.savetxt(ofile, g_coeffs_to_fit.detach().cpu().numpy())
+
+if not run_toy: # only needs to be done once
+    data_dict = read_in_data([0, 1], args.distribution, t_bins)
 
 def train(epochs, batch_size, lr):
 
@@ -200,16 +209,11 @@ def train(epochs, batch_size, lr):
 
     alpha_zero = torch.tensor([0.0], device=device, requires_grad=True)
 
-    if not run_toy: # only needs to be done once
-        data_pdf = [get_pdf_data(a, example=args.distribution) for a in allowed_alphas]
-        batch_data_pdf = torch.cat(data_pdf, axis = 1).T
-        loc_alphas =  torch.tensor([0.001*float(a.split("_")[1]) for a in allowed_alphas], device  = device).to(float).reshape(-1,)
 
     for epoch in tqdm(range(epochs)):
 
         optimizer.zero_grad() 
 
-    
         # sample the whole batch of loc_alphas
         if run_toy:
             if False:
@@ -220,21 +224,23 @@ def train(epochs, batch_size, lr):
                 loc_alphas = 1.0 - torch.sqrt(1.0 - loc_alphas)
 
             # get the data pdf for the sampled loc_alphas for the entire batch
-            batch_data_pdf = get_pdf_toy(loc_alphas, example=args.distribution, order=args.order_to_match)        # (B, nbins-1)
+            batch_data_pdf = get_pdf_toy(loc_alphas, example=args.distribution, order=args.order_to_match)        # (B, args.n_bins-1)
             
         else:
-            pass
+            loc_alphas_keys = np.random.choice(list(data_dict.keys()), size = batch_size, replace = False)
+            loc_alphas = torch.tensor([float(a.split("_")[1])*0.001 for a in loc_alphas_keys]).to(device).reshape(-1,)
+            batch_data_pdf = torch.cat([data_dict[a] for a in loc_alphas_keys], axis = 1).T
 
         # get taylor expansion ansatz for the batch
         alpha_zero = torch.tensor(0.0, device=device, requires_grad=True)
         fn = lambda a: q(t_bin_centers, a, g_coeffs_to_fit, mstar)
-        base = fn(alpha_zero)                                # (nbins-1,)
+        base = fn(alpha_zero)                                # (args.n_bins-1,)
 
         if args.order_to_match >= 1:
-            _, d1 = torch.autograd.functional.jvp(fn,  (alpha_zero,), (torch.ones_like(alpha_zero),), create_graph=True)                         # (nbins-1,)
+            _, d1 = torch.autograd.functional.jvp(fn,  (alpha_zero,), (torch.ones_like(alpha_zero),), create_graph=True)                         # (args.n_bins-1,)
         if args.order_to_match == 2:
             d1_fn = lambda a: torch.autograd.functional.jvp(fn, (a,), (torch.ones_like(a),), create_graph=True)[1]
-            _, d2 = torch.autograd.functional.jvp(d1_fn, (alpha_zero,), (torch.ones_like(alpha_zero),), create_graph=True)                         # (nbins-1,)
+            _, d2 = torch.autograd.functional.jvp(d1_fn, (alpha_zero,), (torch.ones_like(alpha_zero),), create_graph=True)                         # (args.n_bins-1,)
 
         # construct the taylor expansion for the loc_alphas
         batch_ansatz = base
@@ -277,9 +283,9 @@ def train(epochs, batch_size, lr):
             diff = torch.abs(log_p - log_q)**2
             loss = torch.mean(torch.nan_to_num(diff))
             """
-            ratio = batch_data_pdf / batch_ansatz
+            ratio = batch_data_pdf / (batch_ansatz + eps)
 
-            loss = torch.pow(torch.log(torch.abs(ratio) ), 2) +  np.pi**2 * (ratio  < 0)
+            loss = torch.pow(torch.log(torch.abs(ratio) + eps), 2) +  np.pi**2 * (ratio  < 0)
             loss = torch.mean(loss)
 
         else:
@@ -349,13 +355,12 @@ colors = ["red", "purple", "blue"]
 for i, alpha in enumerate([0.15, 0.1, 0.05]):
     alpha_tensor = torch.tensor(alpha, device=device)
     ax[2].plot(tt.detach().cpu().numpy(), q(tt, alpha_tensor, g_coeffs_to_fit, mstar).detach().cpu().numpy(), label="Ansatz", color=colors[i])
-
     if run_toy:
         ax[2].plot( t_bin_centers.detach().cpu().numpy(),  get_pdf_toy(alpha_tensor, example=args.distribution, order=-1).detach().cpu().numpy(), label="Target (exact)",  color=colors[i],  linestyle="dashed" )
         ax[2].scatter(  t_bin_centers.detach().cpu().numpy(), get_pdf_toy(alpha_tensor, example=args.distribution, order=args.order_to_match).detach().cpu().numpy(), label=f"Target (order $\\alpha^{args.order_to_match}$)", color=colors[i], s=0.8)
     else:
         alpha_string = "alpha_"+str(int(1000*alpha)).zfill(4)
-        ax[2].plot( t_bin_centers.detach().cpu().numpy(),  get_pdf_data(alpha_string, example=args.distribution).detach().cpu().numpy(), label="Target (exact)",  color=colors[i],  linestyle="dashed" )
+        ax[2].plot( t_bin_centers.detach().cpu().numpy(),  data_dict[alpha_string].detach().cpu().numpy(), label="Target (exact)",  color=colors[i],  linestyle="dashed" )
     
 
     
