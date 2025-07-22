@@ -43,12 +43,7 @@ np.random.seed(args.seed)
 
     
 
-xlim_dict = {
-    "exponential": 20,
-    "angularity": 15,
-    "thrust": 0.8, 
-    "c_parameter": 1, 
-}
+
 
 if args.distribution in ["exponential", "angularity"]:
     run_toy = True
@@ -61,25 +56,23 @@ else:
     exit()
 
 
-xlim = xlim_dict[args.distribution]
 
 if args.use_logbins:
-    t_bins = torch.logspace(-1, np.log10(xlim), args.n_bins, device=device)
+    t_bins = torch.logspace(np.log10(args.t_min), np.log10(args.t_max), args.n_bins, device=device)
     t_bin_centers = torch.sqrt( (t_bins[1:] * t_bins[:-1]))
 else:
-    t_bins = torch.linspace(0, xlim, args.n_bins, device=device)
+    t_bins = torch.linspace(args.t_min, args.t_max, args.n_bins, device=device)
     t_bin_centers = 0.5 * (t_bins[1:] + t_bins[:-1])
 
 
-
-g_coeffs_to_fit = torch.zeros((args.m, args.n), device=device)
+g_coeffs_to_fit = torch.nn.Parameter(torch.zeros((args.m, args.n), device=device))
+theta_to_fit = torch.nn.Parameter(torch.zeros((args.m, args.n), device=device))
 
 
 if args.init_random:
     for m in range(args.m):
         for n in range(args.n):
-            g_coeffs_to_fit[m,n] = 1.0 / (math.factorial(m+1+mstar)*math.factorial(n+1))
-    outfile_name += "_init_random"
+            g_coeffs_to_fit.data[m,n] = 1.0 / (math.factorial(m+1+mstar)*math.factorial(n+1))
 
     
 elif args.init_at_answer:
@@ -112,28 +105,33 @@ m_range = torch.arange(1, max_M, device=device)
 
 N_integrator = 250
 
-def f(t, alpha, g_coeffs, mstar):
+def helper_theta(x, temperature = 20):
+    #return torch.where(x >= 0, 1.0, 0.0)
+    return torch.sigmoid(temperature * x)
+
+
+def f(t, alpha, g_coeffs, theta, mstar):
     t_powers = (t[..., None] ** n_range) / factorial_cache_n
-    g_star = alpha ** mstar * torch.abs(torch.sum(g_coeffs[0] * t_powers, dim=-1))
+    g_star = alpha ** mstar * torch.abs(torch.sum(g_coeffs[0] * t_powers * helper_theta(theta[0]), dim=-1))
     t_powers_exp = t_powers.unsqueeze(-2)
-    g_coeffs_higher = g_coeffs[1:] / factorial_cache_m[1:, None]
+    g_coeffs_higher = g_coeffs[1:] * helper_theta(theta[1:])  / factorial_cache_m[1:, None]
     g_higher_mat = torch.sum(g_coeffs_higher * t_powers_exp, dim=-1)
     g_higher = torch.sum((alpha ** (mstar + m_range)) * g_higher_mat, dim=-1)
     return g_star * torch.exp(-g_higher)
 
-def cumulative_trapezoidal(alpha, g_coeffs, mstar, t_grid):
-    f_vals = f(t_grid, alpha, g_coeffs, mstar)
+def cumulative_trapezoidal(alpha, g_coeffs, theta, mstar, t_grid):
+    f_vals = f(t_grid, alpha, g_coeffs, theta, mstar)
     dt = t_grid[1] - t_grid[0]
     cum = torch.cumsum((f_vals[:-1] + f_vals[1:]) * 0.5 * dt, dim=0)
     cum = torch.cat([torch.zeros(1, device=device), cum])
     return cum
 
 
-def q(t, alpha, g_coeffs, mstar):
+def q(t, alpha, g_coeffs, theta, mstar):
 
 
-    t_dense = torch.linspace(0.0, xlim, N_integrator, device=device)
-    F_dense = cumulative_trapezoidal(alpha, g_coeffs, mstar, t_dense)
+    t_dense = torch.linspace(args.t_min, args.t_max, N_integrator, device=device)
+    F_dense = cumulative_trapezoidal(alpha, g_coeffs, theta, mstar, t_dense)
 
     # Interpolate
     epsilon_regularization = 1e-12
@@ -142,7 +140,7 @@ def q(t, alpha, g_coeffs, mstar):
     t0, t1 = t_dense[idx], t_dense[idx + 1]
     F0, F1 = F_dense[idx], F_dense[idx + 1]
     exp_term = F0 + (F1 - F0) * (t - t0) / (t1 - t0 + epsilon_regularization)
-    return f(t, alpha, g_coeffs, mstar) * torch.exp(-exp_term)
+    return f(t, alpha, g_coeffs, theta, mstar) * torch.exp(-exp_term)
 
 
 def get_pdf_toys(alpha, *, example="exponential", order=1):
@@ -161,15 +159,22 @@ def get_pdf_toys(alpha, *, example="exponential", order=1):
             y = alpha * t_bin_centers
         elif order == 2:
             y = alpha * t_bin_centers * (1 - alpha * t_bin_centers**2 / 2)
+
+   
     else:
         raise ValueError("bad example/order")
     #y[y < 0] = 0
     return y.squeeze(0)
 
 
+
+
 def read_in_data(file_indices, example, t_bins):
+    from sklearn.preprocessing import MinMaxScaler
+
 
     data_dict = {}
+    bin_width = t_bins[1] - t_bins[0]
 
     for i in file_indices:
         with open(f"event_records_LO_{i}.pkl", "rb") as ifile:
@@ -178,7 +183,15 @@ def read_in_data(file_indices, example, t_bins):
                 loc_data = loc_data_dict[alpha][example]
                 if example == "thrust":
                     loc_data = [2.0*(1.0 - x) for x in loc_data]
-                y, _ = np.histogram(loc_data, bins = t_bins, density = True)
+
+                #scaler = MinMaxScaler()
+                #loc_data = scaler.fit_transform(np.array(loc_data).reshape(-1,1))
+
+                # convert to t-space
+                loc_data = [np.log(1.0 / (x + 1e-12)) for x in loc_data]
+                
+                y, _ = np.histogram(loc_data, weights = loc_data_dict[alpha]["weight"], bins = t_bins, density = False)
+                y /= bin_width
                 y = torch.tensor(y, device = device).reshape(-1, 1)
                 data_dict[alpha] = y.squeeze(0).float()
 
@@ -196,8 +209,12 @@ if not run_toy: # only needs to be done once
 def train(epochs, batch_size, lr):
 
 
-    g_coeffs_to_fit.requires_grad_()
-    optimizer = torch.optim.AdamW([g_coeffs_to_fit], lr=lr)
+
+    if args.learn_theta:
+        optimizer = torch.optim.AdamW([g_coeffs_to_fit, theta_to_fit], lr=lr)
+    else:
+        optimizer = torch.optim.AdamW([g_coeffs_to_fit], lr=lr)
+        
     scheduler = ExponentialLR(optimizer, gamma = 1)
 
     MSE_criterion = torch.nn.MSELoss()
@@ -206,6 +223,9 @@ def train(epochs, batch_size, lr):
     lrs = np.zeros((epochs, 1))
     g_coeffs_log = np.zeros((epochs + 1, *g_coeffs_to_fit.shape))
     g_coeffs_log[0] = g_coeffs_to_fit.detach().cpu().numpy()
+
+    theta_log = np.zeros((epochs + 1, *theta_to_fit.shape))
+    theta_log[0] = theta_to_fit.detach().cpu().numpy()
 
     alpha_zero = torch.tensor([0.0], device=device, requires_grad=True)
 
@@ -233,7 +253,7 @@ def train(epochs, batch_size, lr):
 
         # get taylor expansion ansatz for the batch
         alpha_zero = torch.tensor(0.0, device=device, requires_grad=True)
-        fn = lambda a: q(t_bin_centers, a, g_coeffs_to_fit, mstar)
+        fn = lambda a: q(t_bin_centers, a, g_coeffs_to_fit, theta_to_fit, mstar)
         base = fn(alpha_zero)                                # (args.n_bins-1,)
 
         if args.order_to_match >= 1:
@@ -291,7 +311,6 @@ def train(epochs, batch_size, lr):
         else:
             loss = MSE_criterion(batch_data_pdf, batch_ansatz)
 
-
             
         loss.backward()
 
@@ -306,16 +325,17 @@ def train(epochs, batch_size, lr):
         losses[epoch] = loss.detach().cpu().numpy()
         lrs[epoch] = scheduler.get_lr()[0]
         g_coeffs_log[epoch + 1] = g_coeffs_to_fit.detach().cpu().numpy()
+        theta_log[epoch + 1] = theta_to_fit.detach().cpu().numpy()
 
         #print(f"Epoch {epoch + 1}/{epochs}, Loss: {loss.item():.6e}")
         
 
         #
 
-    return losses, lrs, g_coeffs_log
+    return losses, lrs, g_coeffs_log, theta_log
 
 # Run training
-losses, lrs, g_coeffs_log = train(args.epochs, args.batch_size, args.lr)
+losses, lrs, g_coeffs_log, theta_log = train(args.epochs, args.batch_size, args.lr)
 
 
 
@@ -347,14 +367,14 @@ ax[1].set_ylabel("Coefficient value")
 
 
 
-tt = torch.linspace(0, xlim, 200, device=device)
+tt = torch.linspace(args.t_min, args.t_max, 200, device=device)
 colors = ["red", "purple", "blue"]
 
 
 
 for i, alpha in enumerate([0.15, 0.1, 0.05]):
     alpha_tensor = torch.tensor(alpha, device=device)
-    ax[2].plot(tt.detach().cpu().numpy(), q(tt, alpha_tensor, g_coeffs_to_fit, mstar).detach().cpu().numpy(), label="Ansatz", color=colors[i])
+    ax[2].plot(tt.detach().cpu().numpy(), q(tt, alpha_tensor, g_coeffs_to_fit, theta_to_fit, mstar).detach().cpu().numpy(), label="Ansatz", color=colors[i])
     if run_toy:
         ax[2].plot( t_bin_centers.detach().cpu().numpy(),  get_pdf_toy(alpha_tensor, example=args.distribution, order=-1).detach().cpu().numpy(), label="Target (exact)",  color=colors[i],  linestyle="dashed" )
         ax[2].scatter(  t_bin_centers.detach().cpu().numpy(), get_pdf_toy(alpha_tensor, example=args.distribution, order=args.order_to_match).detach().cpu().numpy(), label=f"Target (order $\\alpha^{args.order_to_match}$)", color=colors[i], s=0.8)
@@ -381,5 +401,9 @@ save_dict = {}
 save_dict["loss"] = losses
 save_dict["lrs"] = lrs
 save_dict["g_coeffs"] = g_coeffs_log
+save_dict["theta"] = theta_log
+
 with open(f"data/{outfile_name}", "wb") as ofile:
     pickle.dump(save_dict, ofile)
+
+print(theta_to_fit)
