@@ -1,6 +1,7 @@
-distribution: thrust
+distribution: LO_thrust
 order_to_match: 1
 name: test
+mstar: 1
 
 init_random: true
 init_at_answer: false
@@ -9,14 +10,15 @@ learn_theta: true
 
 ratio_loss: false
 use_logbins: false
-n_bins: 50
+n_bins: 100
 t_min: 0
-t_max: 8
+t_max: 10
 
-epochs: 10000
-batch_size: 128
-lr: 0.001
+
+epochs: 20000
+batch_size: 512
+lr: 0.01
 seed: 42
-m: 2
-n: 9
+m: 3
+n: 3
 
