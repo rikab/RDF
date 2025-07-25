@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+import pickle
 
 def get_pdf_toy(alpha, example, tt, order, device):
     alpha = torch.as_tensor(alpha, device=device)[..., None]
@@ -68,7 +69,7 @@ def read_in_data(file_indices, example, t_bins, device):
     from sklearn.preprocessing import MinMaxScaler
 
     data_dict = {}
-    bin_width = t_bins[1] - t_bins[0]
+    bin_width = t_bins.detach().cpu().numpy()[1] - t_bins.detach().cpu().numpy()[0]
 
     for i in file_indices:
         with open(f"event_records_LO_{i}.pkl", "rb") as ifile:
@@ -87,7 +88,7 @@ def read_in_data(file_indices, example, t_bins, device):
                 y, _ = np.histogram(
                     loc_data,
                     weights=loc_data_dict[alpha]["weight"],
-                    bins=t_bins,
+                    bins=t_bins.detach().cpu().numpy(),
                     density=False,
                 )
                 y /= bin_width

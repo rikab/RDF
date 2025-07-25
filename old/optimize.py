@@ -126,7 +126,7 @@ ofile.write("initial g:\n")
 np.savetxt(ofile, g_coeffs_to_fit.detach().cpu().numpy())
 
 if not run_toy:  # only needs to be done once
-    data_dict = read_in_data([2], args.distribution, t_bins)
+    data_dict = read_in_data([2], args.distribution, t_bins, device)
 
 
 def train(epochs, batch_size, lr):
@@ -323,7 +323,7 @@ ax[1].set_xlabel("Epoch")
 ax[1].set_ylabel("Coefficient value")
 
 
-tt = torch.linspace(args.t_min, args.t_max, 200, device=device)
+tt = torch.linspace(args.t_min, 3*args.t_max, 200, device=device)
 colors = ["red", "purple", "blue"]
 
 
@@ -380,7 +380,7 @@ for i, alpha in enumerate([0.148, 0.101, 0.049]):
         )
         ax[2].plot(
             tt.detach().cpu().numpy(),
-            get_pdf_toy(alpha_tensor, "LO_thrust", tt, order=-1)
+            get_pdf_toy(alpha_tensor, "LO_thrust", tt, -1, device)
             .detach()
             .cpu()
             .numpy(),
