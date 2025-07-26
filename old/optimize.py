@@ -161,6 +161,18 @@ if args.use_rikab_loss:
                 d1_fn = lambda a: torch.autograd.functional.jvp(fn, (a,), (torch.ones_like(a),), create_graph=True)[1]
                 _, d2 = torch.autograd.functional.jvp(d1_fn, (alpha_zero,), (torch.ones_like(alpha_zero),), create_graph=True)                         # (nbins-1,)
     
+
+            # print the dtypes and shapes of the tensors
+            if epoch == 0:
+                print(f"base dtype: {base.dtype}, shape: {base.shape}")
+                print(f"d1 dtype: {d1.dtype}, shape: {d1.shape}")
+                print(f"d2 dtype: {d2.dtype}, shape: {d2.shape}")
+                print(f"loc_alphas dtype: {loc_alphas.dtype}, shape: {loc_alphas.shape}")
+                print(f"batch_data_pdf dtype: {batch_data_pdf.dtype}, shape: {batch_data_pdf.shape}")
+                print(f"t_bin_centers dtype: {t_bin_centers.dtype}, shape: {t_bin_centers.shape}")
+                print(f"g_coeffs_to_fit dtype: {g_coeffs_to_fit.dtype}, shape: {g_coeffs_to_fit.shape}")
+                print(f"alpha_zero dtype: {alpha_zero.dtype}, shape: {alpha_zero.shape}")
+
             # construct the taylor expansion for the loc_alphas
             batch_ansatz = base
             if args.order_to_match >= 1:
