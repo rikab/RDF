@@ -1,0 +1,24 @@
+distribution: LO_thrust
+order_to_match: 1
+name: test
+mstar: 1
+
+init_random: true
+init_at_answer: false
+init_close_to_answer: false
+learn_theta: true
+
+ratio_loss: false
+use_logbins: false
+n_bins: 100
+t_min: 0
+t_max: 10
+
+
+epochs: 20000
+batch_size: 512
+lr: 0.01
+seed: 42
+m: 3
+n: 3
+
