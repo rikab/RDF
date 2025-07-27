@@ -66,15 +66,17 @@ else:
 g_coeffs_to_fit = torch.nn.Parameter(
     torch.zeros((args.m, args.n), device=device)
 )
-theta_to_fit = torch.nn.Parameter(torch.zeros((args.m, args.n), device=device))
+#theta_to_fit = torch.nn.Parameter(torch.zeros((args.m, args.n), device=device))
+theta_to_fit = torch.nn.Parameter(torch.zeros((args.m, 1), device=device))
 
 
 if args.init_random:
     for m in range(args.m):
         for n in range(args.n):
-            g_coeffs_to_fit.data[m, n] = 1.0 / (
+            g_coeffs_to_fit.data[m, n] = np.random.normal(loc=0.0, scale=1.0 / (
                 math.factorial(m + mstar) * math.factorial(n)
-            )
+            ))
+
 elif args.init_at_answer:
     outfile_name += "_init_at_answer"
     if args.distribution == "exponential":
@@ -99,7 +101,7 @@ else:
           
 if not args.learn_theta:
     for m in range(args.m):
-        for n in range(args.n):
+        for n in range(1):
             theta_to_fit.data[m, n] = -10.0 # large enough to not interfere with the sigmoid
 
 
@@ -147,6 +149,7 @@ def train(epochs, batch_size, lr):
 
     for epoch in tqdm(range(epochs)):
 
+
         optimizer.zero_grad()
 
         # sample the whole batch of loc_alphas
@@ -174,7 +177,6 @@ def train(epochs, batch_size, lr):
                 args.order_to_match,
                 device
             )  # (B, args.n_bins-1)
-
         else:
             loc_alphas_keys = np.random.choice(
                 list(data_dict.keys()), size=batch_size, replace=False

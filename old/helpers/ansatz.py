@@ -63,6 +63,9 @@ def cumulative_trapezoidal(alpha, g_coeffs, theta, mstar, t_grid, device, factor
 
 def q(t, alpha, g_coeffs, theta, mstar, t_min, t_max, device, factorial_cache_info):
 
+    # added for 1d theta
+    theta = theta.expand(-1, g_coeffs.shape[1])
+
     t_dense = torch.linspace(
         t_min, t_max, N_integrator, device=device
     )
