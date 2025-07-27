@@ -4,3 +4,6 @@ radha_outputs/*
 *.yml
 *.png
 *_model
+old/data/*
+old/plots/*
+old/outputs/*
