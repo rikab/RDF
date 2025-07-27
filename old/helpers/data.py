@@ -72,9 +72,10 @@ def read_in_data(file_indices, example, t_bins, device):
     bin_width = t_bins.detach().cpu().numpy()[1] - t_bins.detach().cpu().numpy()[0]
 
     for i in file_indices:
-        with open(f"event_records_LO_{i}.pkl", "rb") as ifile:
+        with open(f"data/event_records_cheat.pkl", "rb") as ifile:
             loc_data_dict = pickle.load(ifile)
             for alpha in loc_data_dict.keys():
+                
                 loc_data = loc_data_dict[alpha][example]
                 if example == "thrust":
                     loc_data = [2.0 * (1.0 - x) for x in loc_data]

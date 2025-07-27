@@ -118,12 +118,7 @@ factorial_cache_info = factorial_cache_m, factorial_cache_n, m_range, n_range
 
 
 
-ofile = open(f"data/{outfile_name}_g_coeffs.txt", "w")
-ofile.write(
-    f"Epochs: {args.epochs}\nLearning rate: {args.lr}\nBatch size: {args.batch_size}\n\n"
-)
-ofile.write("initial g:\n")
-np.savetxt(ofile, g_coeffs_to_fit.detach().cpu().numpy())
+
 
 if not run_toy:  # only needs to be done once
     data_dict = read_in_data([2], args.distribution, t_bins, device)
@@ -323,7 +318,7 @@ ax[1].set_xlabel("Epoch")
 ax[1].set_ylabel("Coefficient value")
 
 
-tt = torch.linspace(args.t_min, 3*args.t_max, 200, device=device)
+tt = torch.linspace(args.t_min, 10, 200, device=device)
 colors = ["red", "purple", "blue"]
 
 
@@ -396,9 +391,6 @@ ax[2].set_ylabel("Density")
 # ax[2].set_ylim(-0.01, 0.4)
 plt.savefig(f"plots/{outfile_name}_results.png", bbox_inches="tight")
 
-ofile.write("final g:\n")
-np.savetxt(ofile, g_coeffs_to_fit.detach().cpu().numpy())
-ofile.close()
 
 
 save_dict = {}
@@ -408,7 +400,7 @@ save_dict["lrs"] = lrs
 save_dict["g_coeffs"] = g_coeffs_log
 save_dict["theta"] = theta_log
 
-with open(f"data/{outfile_name}", "wb") as ofile:
+with open(f"output/{outfile_name}", "wb") as ofile:
     pickle.dump(save_dict, ofile)
 
 print("Final g")

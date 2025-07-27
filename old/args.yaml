@@ -1,6 +1,6 @@
-distribution: LO_thrust
+distribution: thrust
 order_to_match: 1
-name: test
+name: test2d
 mstar: 1
 
 init_random: true
@@ -12,11 +12,11 @@ ratio_loss: false
 use_logbins: false
 n_bins: 100
 t_min: 0
-t_max: 10
+t_max: 7
 
 
-epochs: 20000
-batch_size: 512
+epochs: 10000
+batch_size: 249
 lr: 0.01
 seed: 42
 m: 3
