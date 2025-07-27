@@ -293,7 +293,7 @@ losses, lrs, g_coeffs_log, theta_log = train(
 
 
 # Plot loss
-fig, ax = plt.subplots(1, 3, figsize=(24, 6))
+fig, ax = plt.subplots(1, 4, figsize=(30, 6))
 
 if args.ratio_loss:
     ax[0].plot(losses, label="ratio loss")
@@ -320,13 +320,28 @@ ax[1].set_xlabel("Epoch")
 ax[1].set_ylabel("Coefficient value")
 
 
+color = iter(
+    cm.hsv(np.linspace(0, 1, theta_log.shape[1] * theta_log.shape[2]))
+)
+
+for m in range(theta_log.shape[1]):
+    for n in range(theta_log.shape[2]):
+        c = next(color)
+        label = f"theta {m} {n}"
+        ax[2].plot(theta_log[:, m, n], label=label, color=c)
+ax[2].legend()
+ax[2].set_xlabel("Epoch")
+ax[2].set_ylabel("Theta value")
+
+
+
 tt = torch.linspace(args.t_min, 10, 200, device=device)
 colors = ["red", "purple", "blue"]
 
 
 for i, alpha in enumerate([0.148, 0.101, 0.049]):
     alpha_tensor = torch.tensor(alpha, device=device)
-    ax[2].plot(
+    ax[3].plot(
         tt.detach().cpu().numpy(),
         q(tt, alpha_tensor, g_coeffs_to_fit, theta_to_fit, mstar, args.t_min, args.t_max, device, factorial_cache_info)
         .detach()
@@ -337,7 +352,7 @@ for i, alpha in enumerate([0.148, 0.101, 0.049]):
     )
 
     if run_toy:
-        ax[2].plot(
+        ax[3].plot(
             t_bin_centers.detach().cpu().numpy(),
             get_pdf_toy(
                 alpha_tensor, args.distribution, t_bin_centers, -1, device
@@ -349,7 +364,7 @@ for i, alpha in enumerate([0.148, 0.101, 0.049]):
             color=colors[i],
             linestyle="dashed",
         )
-        ax[2].scatter(
+        ax[3].scatter(
             t_bin_centers.detach().cpu().numpy(),
             get_pdf_toy(
                 alpha_tensor,
@@ -368,14 +383,14 @@ for i, alpha in enumerate([0.148, 0.101, 0.049]):
 
     else:
         alpha_string = "alpha_" + str(int(1000 * alpha)).zfill(4)
-        ax[2].plot(
+        ax[3].plot(
             t_bin_centers.detach().cpu().numpy(),
             data_dict[alpha_string].detach().cpu().numpy(),
             label="Target (data)",
             color=colors[i],
             linestyle="dotted",
         )
-        ax[2].plot(
+        ax[3].plot(
             tt.detach().cpu().numpy(),
             get_pdf_toy(alpha_tensor, "LO_thrust", tt, -1, device)
             .detach()
@@ -387,9 +402,9 @@ for i, alpha in enumerate([0.148, 0.101, 0.049]):
         )
 
 
-ax[2].legend()
-ax[2].set_xlabel("$t$")
-ax[2].set_ylabel("Density")
+ax[3].legend()
+ax[3].set_xlabel("$t$")
+ax[3].set_ylabel("Density")
 # ax[2].set_ylim(-0.01, 0.4)
 plt.savefig(f"plots/{outfile_name}_results.png", bbox_inches="tight")
 
