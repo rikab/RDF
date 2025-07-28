@@ -66,15 +66,27 @@ else:
 g_coeffs_to_fit = torch.nn.Parameter(
     torch.zeros((args.m, args.n), device=device)
 )
+<<<<<<< HEAD
 theta_to_fit = torch.nn.Parameter(torch.zeros((args.m, args.n), device=device))
+=======
+#theta_to_fit = torch.nn.Parameter(torch.zeros((args.m, args.n), device=device))
+theta_to_fit = torch.nn.Parameter(torch.zeros((args.m, 1), device=device))
+>>>>>>> 5281c87249953e4c723d0ff56f3b1af632bea21f
 
 
 if args.init_random:
     for m in range(args.m):
         for n in range(args.n):
+<<<<<<< HEAD
             g_coeffs_to_fit.data[m, n] = 1.0 / (
                 math.factorial(m + mstar) * math.factorial(n)
             )
+=======
+            g_coeffs_to_fit.data[m, n] = np.random.normal(loc=0.0, scale=1.0 / (
+                math.factorial(m + mstar) * math.factorial(n)
+            ))
+
+>>>>>>> 5281c87249953e4c723d0ff56f3b1af632bea21f
 elif args.init_at_answer:
     outfile_name += "_init_at_answer"
     if args.distribution == "exponential":
@@ -99,7 +111,11 @@ else:
           
 if not args.learn_theta:
     for m in range(args.m):
+<<<<<<< HEAD
         for n in range(args.n):
+=======
+        for n in range(1):
+>>>>>>> 5281c87249953e4c723d0ff56f3b1af632bea21f
             theta_to_fit.data[m, n] = -10.0 # large enough to not interfere with the sigmoid
 
 
@@ -118,12 +134,16 @@ factorial_cache_info = factorial_cache_m, factorial_cache_n, m_range, n_range
 
 
 
+<<<<<<< HEAD
 ofile = open(f"data/{outfile_name}_g_coeffs.txt", "w")
 ofile.write(
     f"Epochs: {args.epochs}\nLearning rate: {args.lr}\nBatch size: {args.batch_size}\n\n"
 )
 ofile.write("initial g:\n")
 np.savetxt(ofile, g_coeffs_to_fit.detach().cpu().numpy())
+=======
+
+>>>>>>> 5281c87249953e4c723d0ff56f3b1af632bea21f
 
 if not run_toy:  # only needs to be done once
     data_dict = read_in_data([2], args.distribution, t_bins, device)
@@ -152,6 +172,10 @@ def train(epochs, batch_size, lr):
 
     for epoch in tqdm(range(epochs)):
 
+<<<<<<< HEAD
+=======
+
+>>>>>>> 5281c87249953e4c723d0ff56f3b1af632bea21f
         optimizer.zero_grad()
 
         # sample the whole batch of loc_alphas
@@ -179,7 +203,10 @@ def train(epochs, batch_size, lr):
                 args.order_to_match,
                 device
             )  # (B, args.n_bins-1)
+<<<<<<< HEAD
 
+=======
+>>>>>>> 5281c87249953e4c723d0ff56f3b1af632bea21f
         else:
             loc_alphas_keys = np.random.choice(
                 list(data_dict.keys()), size=batch_size, replace=False
@@ -296,7 +323,11 @@ losses, lrs, g_coeffs_log, theta_log = train(
 
 
 # Plot loss
+<<<<<<< HEAD
 fig, ax = plt.subplots(1, 3, figsize=(24, 6))
+=======
+fig, ax = plt.subplots(1, 4, figsize=(30, 6))
+>>>>>>> 5281c87249953e4c723d0ff56f3b1af632bea21f
 
 if args.ratio_loss:
     ax[0].plot(losses, label="ratio loss")
@@ -323,13 +354,36 @@ ax[1].set_xlabel("Epoch")
 ax[1].set_ylabel("Coefficient value")
 
 
+<<<<<<< HEAD
 tt = torch.linspace(args.t_min, 3*args.t_max, 200, device=device)
+=======
+color = iter(
+    cm.hsv(np.linspace(0, 1, theta_log.shape[1] * theta_log.shape[2]))
+)
+
+for m in range(theta_log.shape[1]):
+    for n in range(theta_log.shape[2]):
+        c = next(color)
+        label = f"theta {m} {n}"
+        ax[2].plot(theta_log[:, m, n], label=label, color=c)
+ax[2].legend()
+ax[2].set_xlabel("Epoch")
+ax[2].set_ylabel("Theta value")
+
+
+
+tt = torch.linspace(args.t_min, 10, 200, device=device)
+>>>>>>> 5281c87249953e4c723d0ff56f3b1af632bea21f
 colors = ["red", "purple", "blue"]
 
 
 for i, alpha in enumerate([0.148, 0.101, 0.049]):
     alpha_tensor = torch.tensor(alpha, device=device)
+<<<<<<< HEAD
     ax[2].plot(
+=======
+    ax[3].plot(
+>>>>>>> 5281c87249953e4c723d0ff56f3b1af632bea21f
         tt.detach().cpu().numpy(),
         q(tt, alpha_tensor, g_coeffs_to_fit, theta_to_fit, mstar, args.t_min, args.t_max, device, factorial_cache_info)
         .detach()
@@ -340,7 +394,11 @@ for i, alpha in enumerate([0.148, 0.101, 0.049]):
     )
 
     if run_toy:
+<<<<<<< HEAD
         ax[2].plot(
+=======
+        ax[3].plot(
+>>>>>>> 5281c87249953e4c723d0ff56f3b1af632bea21f
             t_bin_centers.detach().cpu().numpy(),
             get_pdf_toy(
                 alpha_tensor, args.distribution, t_bin_centers, -1, device
@@ -352,7 +410,11 @@ for i, alpha in enumerate([0.148, 0.101, 0.049]):
             color=colors[i],
             linestyle="dashed",
         )
+<<<<<<< HEAD
         ax[2].scatter(
+=======
+        ax[3].scatter(
+>>>>>>> 5281c87249953e4c723d0ff56f3b1af632bea21f
             t_bin_centers.detach().cpu().numpy(),
             get_pdf_toy(
                 alpha_tensor,
@@ -371,14 +433,22 @@ for i, alpha in enumerate([0.148, 0.101, 0.049]):
 
     else:
         alpha_string = "alpha_" + str(int(1000 * alpha)).zfill(4)
+<<<<<<< HEAD
         ax[2].plot(
+=======
+        ax[3].plot(
+>>>>>>> 5281c87249953e4c723d0ff56f3b1af632bea21f
             t_bin_centers.detach().cpu().numpy(),
             data_dict[alpha_string].detach().cpu().numpy(),
             label="Target (data)",
             color=colors[i],
             linestyle="dotted",
         )
+<<<<<<< HEAD
         ax[2].plot(
+=======
+        ax[3].plot(
+>>>>>>> 5281c87249953e4c723d0ff56f3b1af632bea21f
             tt.detach().cpu().numpy(),
             get_pdf_toy(alpha_tensor, "LO_thrust", tt, -1, device)
             .detach()
@@ -390,6 +460,7 @@ for i, alpha in enumerate([0.148, 0.101, 0.049]):
         )
 
 
+<<<<<<< HEAD
 ax[2].legend()
 ax[2].set_xlabel("$t$")
 ax[2].set_ylabel("Density")
@@ -399,6 +470,14 @@ plt.savefig(f"plots/{outfile_name}_results.png", bbox_inches="tight")
 ofile.write("final g:\n")
 np.savetxt(ofile, g_coeffs_to_fit.detach().cpu().numpy())
 ofile.close()
+=======
+ax[3].legend()
+ax[3].set_xlabel("$t$")
+ax[3].set_ylabel("Density")
+# ax[2].set_ylim(-0.01, 0.4)
+plt.savefig(f"plots/{outfile_name}_results.png", bbox_inches="tight")
+
+>>>>>>> 5281c87249953e4c723d0ff56f3b1af632bea21f
 
 
 save_dict = {}
@@ -408,7 +487,11 @@ save_dict["lrs"] = lrs
 save_dict["g_coeffs"] = g_coeffs_log
 save_dict["theta"] = theta_log
 
+<<<<<<< HEAD
 with open(f"data/{outfile_name}", "wb") as ofile:
+=======
+with open(f"output/{outfile_name}", "wb") as ofile:
+>>>>>>> 5281c87249953e4c723d0ff56f3b1af632bea21f
     pickle.dump(save_dict, ofile)
 
 print("Final g")
