@@ -409,16 +409,13 @@ ax[3].set_ylabel("Density")
 plt.savefig(f"plots/{outfile_name}_results.png", bbox_inches="tight")
 
 
+np.save(f"output/{outfile_name}_losses", losses)
+np.save(f"output/{outfile_name}_g_coeffs", g_coeffs_log)
+np.save(f"output/{outfile_name}_theta", theta_log)
 
-save_dict = {}
-save_dict["loss"] = losses
-save_dict["configs"] = config
-save_dict["lrs"] = lrs
-save_dict["g_coeffs"] = g_coeffs_log
-save_dict["theta"] = theta_log
-
-with open(f"output/{outfile_name}", "wb") as ofile:
-    pickle.dump(save_dict, ofile)
+    
+with open(f"output/{outfile_name}_config", "wb") as ofile:
+    pickle.dump(config, ofile)
 
 print("Final g")
 print(g_coeffs_to_fit)
