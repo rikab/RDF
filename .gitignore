@@ -3,11 +3,7 @@ old/test/*
 radha_outputs/*
 *.yml
 *.png
-<<<<<<< HEAD
-*_model
-=======
 *_model
 old/data/*
 old/plots/*
 old/output/*
->>>>>>> 5281c87249953e4c723d0ff56f3b1af632bea21f

@@ -18,6 +18,20 @@ def get_pdf_toy(alpha, example, tt, order, device):
             y = alpha * tt
         elif order == 2:
             y = alpha * tt * (1 - alpha * tt**2 / 2)
+
+
+    elif example == "thrust_TEST":
+
+        x = torch.exp(-tt)
+        x = x / 2
+
+        term_0 = alpha * 4/3 / np.pi
+        term_1 = np.log(1/x) / x
+        term_2 = np.exp(-term_0 / 2 * np.log(1/x)**2)
+
+        return term_0 * term_1 * term_2
+
+
     elif example == "LO_thrust":
 
         if order == 1:
