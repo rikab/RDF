@@ -2,6 +2,39 @@ import numpy as np
 import torch
 import pickle
 
+<<<<<<< HEAD
+=======
+
+N_C = 3
+N_F = 5
+
+C_F = (N_C**2 - 1) / (2 * N_C) # Quark Casimir, 4/3
+C_A = N_C # Gluon Casimir, 3
+T_F = 1/2 
+
+zeta_3 = 1.20205690315959
+
+MZ = 91.1876 # GeV
+MW = 80.379 # GeV
+MH = 125.18 # GeV
+MT = 173.21 # GeV
+
+
+alpha_s_MZ = 0.1181
+
+
+beta0 = (11 * N_C - 4 * T_F * N_F) / 3
+beta1 = (34 * N_C**2 - 20 * C_A * T_F * N_F - 12 * C_F * T_F * N_F ) / 3
+
+
+def running_coupling(alpha_0, mu0, mu):
+    """
+    Running coupling constant at scale mu, given the coupling at scale mu0.
+    """
+    return alpha_0 / (1 + beta0 * alpha_0 * torch.log(mu / mu0) / (2 * np.pi))
+
+
+>>>>>>> 5815013f4eadeca30bccc244c488d7bbb29d64a5
 def get_pdf_toy(alpha, example, tt, order, device):
     alpha = torch.as_tensor(alpha, device=device)[..., None]
     if example == "exponential":
@@ -18,6 +51,7 @@ def get_pdf_toy(alpha, example, tt, order, device):
             y = alpha * tt
         elif order == 2:
             y = alpha * tt * (1 - alpha * tt**2 / 2)
+<<<<<<< HEAD
 
 
     elif example == "thrust_TEST":
@@ -32,6 +66,8 @@ def get_pdf_toy(alpha, example, tt, order, device):
         return term_0 * term_1 * term_2
 
 
+=======
+>>>>>>> 5815013f4eadeca30bccc244c488d7bbb29d64a5
     elif example == "LO_thrust":
 
         if order == 1:
