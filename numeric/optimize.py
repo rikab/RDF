@@ -379,4 +379,8 @@ print("Final g")
 print(g_coeffs_to_fit)
 print("Final theta")
 
+<<<<<<< HEAD
 print(theta_to_fit)
+=======
+print(theta_to_fit)
+>>>>>>> 5815013f4eadeca30bccc244c488d7bbb29d64a5

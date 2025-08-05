@@ -2,6 +2,8 @@ import numpy as np
 import torch
 import pickle
 
+<<<<<<< HEAD
+=======
 
 N_C = 3
 N_F = 5
@@ -32,6 +34,7 @@ def running_coupling(alpha_0, mu0, mu):
     return alpha_0 / (1 + beta0 * alpha_0 * torch.log(mu / mu0) / (2 * np.pi))
 
 
+>>>>>>> 5815013f4eadeca30bccc244c488d7bbb29d64a5
 def get_pdf_toy(alpha, example, tt, order, device):
     alpha = torch.as_tensor(alpha, device=device)[..., None]
     if example == "exponential":
@@ -48,6 +51,23 @@ def get_pdf_toy(alpha, example, tt, order, device):
             y = alpha * tt
         elif order == 2:
             y = alpha * tt * (1 - alpha * tt**2 / 2)
+<<<<<<< HEAD
+
+
+    elif example == "thrust_TEST":
+
+        x = torch.exp(-tt)
+        x = x / 2
+
+        term_0 = alpha * 4/3 / np.pi
+        term_1 = np.log(1/x) / x
+        term_2 = np.exp(-term_0 / 2 * np.log(1/x)**2)
+
+        return term_0 * term_1 * term_2
+
+
+=======
+>>>>>>> 5815013f4eadeca30bccc244c488d7bbb29d64a5
     elif example == "LO_thrust":
 
         if order == 1:
