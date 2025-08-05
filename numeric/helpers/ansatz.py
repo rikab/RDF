@@ -4,7 +4,7 @@ N_integrator = 250
 eps = 1e-12
 
 
-def helper_theta(x, x0, temperature=200):
+def helper_theta(x, x0, temperature=50):
     #return torch.where(x >= 0, 1.0, 0.0)
     return torch.sigmoid(temperature * (x - x0))
 
@@ -25,7 +25,7 @@ def f(t, alpha, g_coeffs, theta, mstar, factorial_cache_info):
     g_coeffs_0_exp = g_coeffs[0].unsqueeze(0).expand(B, max_N)
     heaviside_theta_gstar = helper_theta(t_exp, theta_0_exp)
 
-    g_star = alpha**mstar * torch.nn.ReLU()(
+    g_star = alpha**mstar * torch.nn.GELU()(
         torch.sum(g_coeffs_0_exp * t_powers * heaviside_theta_gstar, dim=-1)
     )
 
@@ -78,5 +78,3 @@ def q(t, alpha, g_coeffs, theta, mstar, t_min, t_max, device, factorial_cache_in
     F0, F1 = F_dense[idx], F_dense[idx + 1]
     exp_term = F0 + (F1 - F0) * (t - t0) / (t1 - t0 + eps)
     return f(t, alpha, g_coeffs, theta, mstar, factorial_cache_info) * torch.exp(-exp_term)
-
-
