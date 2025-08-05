@@ -1,4 +1,5 @@
 *.npy
+*.pkl
 old/test/*
 radha_outputs/*
 *.yml
