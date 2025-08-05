@@ -40,7 +40,7 @@ mstar = args.mstar
 outfile_name = f"{args.distribution}_{args.order_to_match}_{args.name}"
 
 
-device = "cuda"  # torch.device("cuda" if torch.cuda.is_available() else "cpu")
+device = args.device
 torch.manual_seed(args.seed)
 np.random.seed(args.seed)
 
@@ -250,13 +250,14 @@ def train(epochs, batch_size, lr):
             loss = torch.mean(loss)
 
         else:
-            # weighted MSE
-            rescaled_pdf = batch_data_pdf[batch_errors_pdf > 0]
-            rescaled_ansatz = batch_ansatz[batch_errors_pdf > 0]
-            rescaled_errors = batch_errors_pdf[batch_errors_pdf > 0]
-            loss = torch.mean(torch.pow(rescaled_pdf-rescaled_ansatz, 2)/torch.pow(rescaled_errors, 2))
-            
-            #loss = MSE_criterion(batch_data_pdf,batch_ansatz)
+
+            if args.weighted_mse_loss:
+                rescaled_pdf = batch_data_pdf[batch_errors_pdf > 0]
+                rescaled_ansatz = batch_ansatz[batch_errors_pdf > 0]
+                rescaled_errors = batch_errors_pdf[batch_errors_pdf > 0]
+                loss = torch.mean(torch.pow(rescaled_pdf-rescaled_ansatz, 2)/torch.pow(rescaled_errors, 2))
+            else:     
+                loss = MSE_criterion(batch_data_pdf,batch_ansatz)
 
 
         loss.backward(retain_graph=True)
