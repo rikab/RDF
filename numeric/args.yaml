@@ -1,6 +1,7 @@
 distribution: thrust
+run_toy: false
 order_to_match: 1
-name: test2d
+name: 3d
 mstar: 1
 
 init_random: true
@@ -12,13 +13,12 @@ ratio_loss: false
 use_logbins: false
 n_bins: 100
 t_min: 0
-t_max: 7
+t_max: 10
 
 
 epochs: 10000
-batch_size: 249
-lr: 0.01
+batch_size: 100
+lr: 0.001
 seed: 42
-m: 2
-n: 2
-
+m: 3
+n: 3
