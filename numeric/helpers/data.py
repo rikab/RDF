@@ -103,36 +103,35 @@ def get_pdf_toy(alpha, example, tt, order, device):
     return y.squeeze(0)
 
 
+def read_in_data(distribution, order, device):
 
-def read_in_data(file_indices, example, t_bins, device):
-    from sklearn.preprocessing import MinMaxScaler
+    if order == 1:
+        order_key = "LO"
+    elif order == 2:
+        order_key = "NLO"
 
+    if distribution == "thrust":
+        path_to_data = "data/thrust_data.pkl"
+    elif distribution == "c_param":
+        path_to_data = "data/c_param_data.pkl"
+        
     data_dict = {}
-    bin_width = t_bins.detach().cpu().numpy()[1] - t_bins.detach().cpu().numpy()[0]
 
-    for i in file_indices:
-        with open(f"data/event_records_cheat.pkl", "rb") as ifile:
-            loc_data_dict = pickle.load(ifile)
-            for alpha in loc_data_dict.keys():
-                
-                loc_data = loc_data_dict[alpha][example]
-                if example == "thrust":
-                    loc_data = [2.0 * (1.0 - x) for x in loc_data]
+    with open(path_to_data, "rb") as ifile:
+        loc_data_dict = pickle.load(ifile)
+        for alpha in loc_data_dict.keys():
 
-                # scaler = MinMaxScaler()
-                # loc_data = scaler.fit_transform(np.array(loc_data).reshape(-1,1))
+            y_data = loc_data_dict[alpha][f"values_{order_key}"]
+            y_data = torch.tensor(y_data, device=device).reshape(-1, 1)
 
-                # convert to t-space
-                loc_data = [np.log(1.0 / (x + 1e-12)) for x in loc_data]
+            y_err = loc_data_dict[alpha][f"mcerr_{order_key}"]
+            y_err = torch.tensor(y_err, device=device).reshape(-1, 1)
 
-                y, _ = np.histogram(
-                    loc_data,
-                    weights=loc_data_dict[alpha]["weight"],
-                    bins=t_bins.detach().cpu().numpy(),
-                    density=False,
-                )
-                y /= bin_width
-                y = torch.tensor(y, device=device).reshape(-1, 1)
-                data_dict[alpha] = y.squeeze(0).float()
+            data_dict[float(alpha)*1e-3] = y_data, y_err
 
-    return data_dict
+            bin_centers = torch.tensor(loc_data_dict[alpha]["bin_centers"], device=device).reshape(-1, )
+            bin_edges = np.concatenate([loc_data_dict[alpha]["bin_lows"], loc_data_dict[alpha]["bin_highs"][-1].reshape(-1,)])
+            bin_edges = torch.tensor(bin_edges, device=device).reshape(-1, )
+
+
+    return data_dict, bin_edges, bin_centers
