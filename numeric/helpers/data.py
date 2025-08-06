@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 import pickle
+import jax.numpy as jnp
 
 
 N_C = 3
@@ -148,6 +149,40 @@ def read_in_data(distribution, order, device):
             bin_centers = torch.tensor(loc_data_dict[alpha]["bin_centers"], device=device).reshape(-1, )
             bin_edges = np.concatenate([loc_data_dict[alpha]["bin_lows"], loc_data_dict[alpha]["bin_highs"][-1].reshape(-1,)])
             bin_edges = torch.tensor(bin_edges, device=device).reshape(-1, )
+
+
+    return data_dict, bin_edges, bin_centers
+
+
+def read_in_data_JAX(distribution, order):
+
+    if order == 1:
+        order_key = "LO"
+    elif order == 2:
+        order_key = "NLO"
+
+    if distribution == "thrust":
+        path_to_data = "data/thrust_data.pkl"
+    elif distribution == "c_param":
+        path_to_data = "data/c_param_data.pkl"
+        
+    data_dict = {}
+
+    with open(path_to_data, "rb") as ifile:
+        loc_data_dict = pickle.load(ifile)
+        for alpha in loc_data_dict.keys():
+
+            y_data = loc_data_dict[alpha][f"values_{order_key}"]
+            y_data = jnp.array(y_data).reshape(-1, 1)
+
+            y_err = loc_data_dict[alpha][f"mcerr_{order_key}"]
+            y_err = jnp.array(y_err).reshape(-1, 1)
+
+            data_dict[float(alpha)*1e-3] = y_data, y_err
+
+            bin_centers = jnp.array(loc_data_dict[alpha]["bin_centers"]).reshape(-1, )
+            bin_edges = jnp.concatenate([loc_data_dict[alpha]["bin_lows"], loc_data_dict[alpha]["bin_highs"][-1].reshape(-1,)])
+            bin_edges = jnp.array(bin_edges).reshape(-1, )
 
 
     return data_dict, bin_edges, bin_centers
