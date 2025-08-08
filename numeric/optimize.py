@@ -9,7 +9,7 @@ from torch.func import jacrev
 import pickle
 
 from helpers.data import get_pdf_toy, read_in_data
-from helpers.ansatz import q, eps
+from helpers.ansatz import q, eps, get_taylor_expanded_ansatz, get_factorial_cache
 
 from torch.optim.lr_scheduler import ReduceLROnPlateau, ExponentialLR
 
@@ -58,8 +58,8 @@ if args.run_toy: # define bins on-the-fly
 else:
     # load in data, extract d bins
     data_dict, t_bins, t_bin_centers = read_in_data(args.distribution, args.order_to_match, device)
-    t_min = torch.min(t_bins)
-    t_max = torch.max(t_bins)
+    t_min = torch.min(t_bin_centers)
+    t_max = torch.max(t_bin_centers)
         
 
 g_coeffs_to_fit = torch.nn.Parameter(
@@ -102,36 +102,11 @@ if not args.learn_theta:
         for n in range(1):
             theta_to_fit.data[m, n] = -10.0 # large enough to not interfere with the sigmoid
 
-"""
-g_coeffs_to_fit.data[0,0] = -0.0438
-g_coeffs_to_fit.data[0,1] = 0.8412
-g_coeffs_to_fit.data[0,2] =0.0016
-g_coeffs_to_fit.data[1,0] = 0.5639
-g_coeffs_to_fit.data[1,1] = -0.0867
-g_coeffs_to_fit.data[1,2] = -0.0433
-g_coeffs_to_fit.data[2,0] = 0.1949
-g_coeffs_to_fit.data[2,1] = 0.0947
-g_coeffs_to_fit.data[2,2] = -0.0290
 
-#theta_to_fit.data[0,0] = 0.4563
-#theta_to_fit.data[1,0] =0.0
-#theta_to_fit.data[2,0] = 0.0
-"""
 g_coeffs_to_fit = g_coeffs_to_fit.float()
 theta_to_fit = theta_to_fit.float()
           
-max_M, max_N = g_coeffs_to_fit.shape
-factorial_cache_n = torch.tensor(
-    [math.factorial(k) for k in range(max_N)], device=device
-).float()
-factorial_cache_m = torch.tensor(
-    [math.factorial(k) for k in range(mstar, max_M + mstar)], device=device
-).float()
-n_range = torch.arange(max_N, device=device)
-m_range = torch.arange(1, max_M, device=device)
-
-factorial_cache_info = factorial_cache_m, factorial_cache_n, m_range, n_range
-
+factorial_cache_info = get_factorial_cache(g_coeffs_to_fit.shape[0], g_coeffs_to_fit.shape[1], mstar, device)
 
 
 def train(epochs, batch_size, lr):
@@ -153,7 +128,7 @@ def train(epochs, batch_size, lr):
     theta_log = np.zeros((epochs + 1, *theta_to_fit.shape))
     theta_log[0] = theta_to_fit.detach().cpu().numpy()
 
-    alpha_zero = torch.tensor([0.0], device=device, requires_grad=True)
+    alpha_zero = torch.tensor([1e-12], device=device, requires_grad=True)
 
     for epoch in tqdm(range(epochs)):
 
@@ -170,7 +145,6 @@ def train(epochs, batch_size, lr):
 
             # get the data pdf for the sampled loc_alphas for the entire batch
             batch_data_pdf = get_pdf_toy(loc_alphas,args.distribution,t_bin_centers,args.order_to_match, device)  # (B, args.n_bins-1)
-        
         else:
             loc_alphas_keys = np.random.choice(list(data_dict.keys()), size=batch_size, replace=False)
             loc_alphas = torch.tensor([a for a in loc_alphas_keys]).to(device).reshape(-1, )
@@ -178,52 +152,16 @@ def train(epochs, batch_size, lr):
             batch_errors_pdf = torch.cat([data_dict[a][1] for a in loc_alphas_keys], axis=1).T
 
         # get taylor expansion ansatz for the batch
-        alpha_zero = torch.tensor(0.0, device=device, requires_grad=True)
+        
         fn = lambda a: q(
             t_bin_centers, a, g_coeffs_to_fit, theta_to_fit, mstar, t_min, t_max, device, factorial_cache_info
         )
-        base = fn(alpha_zero)  # (args.n_bins-1,)
+        batch_ansatz = get_taylor_expanded_ansatz(fn, alpha_zero, loc_alphas, args.order_to_match)
 
-        if args.order_to_match >= 1:
-            _, d1 = torch.autograd.functional.jvp(
-                fn,
-                (alpha_zero,),
-                (torch.ones_like(alpha_zero),),
-                create_graph=True,
-            )  # (args.n_bins-1,)
-        if args.order_to_match == 2:
-            d1_fn = lambda a: torch.autograd.functional.jvp(
-                fn, (a,), (torch.ones_like(a),), create_graph=True
-            )[1]
-            _, d2 = torch.autograd.functional.jvp(
-                d1_fn,
-                (alpha_zero,),
-                (torch.ones_like(alpha_zero),),
-                create_graph=True,
-            )  # (args.n_bins-1,)
-
-        # construct the taylor expansion for the loc_alphas
-        batch_ansatz = base
-        if args.order_to_match >= 1:
-            batch_ansatz = batch_ansatz + loc_alphas[:, None] * d1
-        if args.order_to_match == 2:
-            batch_ansatz = batch_ansatz + 0.5 * (loc_alphas[:, None] ** 2) * d2
-
-        # #  plot the ansatz and data pdf for the first batch
-        # if epoch % 10 == 0 or epoch == epochs - 1:
-        #     plt.figure()
-        #     plt.plot(t_bin_centers.detach().cpu().numpy(), batch_data_pdf[0].detach().cpu().numpy(), label="data")
-        #     plt.plot(t_bin_centers.detach().cpu().numpy(), batch_ansatz[0].detach().cpu().numpy(), label="ansatz, taylor expansion", ls="dotted")
-        #     plt.plot(t_bin_centers.detach().cpu().numpy(), fn(loc_alphas[0]).detach().cpu().numpy(), label="ansatz, full", ls="dashed")
-        #     plt.legend()
-        #     plt.title(f"Epoch {epoch + 1}, alpha={loc_alphas[0].item()}")
-        #     plt.savefig(f"plots/{outfile_name}_epoch_{epoch}.png")
-
-        # compute the loss
 
         batch_data_pdf = batch_data_pdf.reshape(-1).float()
         batch_ansatz = batch_ansatz.reshape(-1).float()
-        batch_errors_pdf = batch_errors_pdf.reshape(-1).float()
+        
 
         if args.ratio_loss:
 
@@ -252,15 +190,17 @@ def train(epochs, batch_size, lr):
         else:
 
             if args.weighted_mse_loss:
+                batch_errors_pdf = batch_errors_pdf.reshape(-1).float()
                 rescaled_pdf = batch_data_pdf[batch_errors_pdf > 0]
                 rescaled_ansatz = batch_ansatz[batch_errors_pdf > 0]
                 rescaled_errors = batch_errors_pdf[batch_errors_pdf > 0]
                 loss = torch.mean(torch.pow(rescaled_pdf-rescaled_ansatz, 2)/torch.pow(rescaled_errors, 2))
             else:     
+
                 loss = MSE_criterion(batch_data_pdf,batch_ansatz)
 
 
-        loss.backward(retain_graph=True)
+        loss.backward()
 
 
         # this strictly makes things worse??
@@ -350,7 +290,7 @@ for i, alpha in enumerate([0.148, 0.101, 0.049]):
 
     if args.run_toy:
         # plot all-orders solution
-        ax[3].plot(t_bin_centers.detach().cpu().numpy(),t_pdf_toy( alpha_tensor, args.distribution, t_bin_centers, -1, device).detach() .cpu().numpy(), label="Target (exact)",color=colors[i],linestyle="dashed",)
+        ax[3].plot(t_bin_centers.detach().cpu().numpy(),get_pdf_toy( alpha_tensor, args.distribution, t_bin_centers, -1, device).detach() .cpu().numpy(), label="Target (exact)",color=colors[i],linestyle="dashed",)
         # plot-fixed order target
         ax[3].scatter(  t_bin_centers.detach().cpu().numpy(),get_pdf_toy( alpha_tensor, args.distribution, t_bin_centers, args.order_to_match,  device ).detach().cpu()  .numpy(),label=f"Target (order $\\alpha^{args.order_to_match}$)",color=colors[i],s=0.8,)
 

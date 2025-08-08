@@ -48,6 +48,15 @@ def get_pdf_toy(alpha, example, tt, order, device):
             y = alpha * tt
         elif order == 2:
             y = alpha * tt * (1 - alpha * tt**2 / 2)
+    elif example == "harder_exp":
+        if order == 1:
+            y = alpha.expand_as(alpha * tt) * 0 + alpha
+        elif order == 2:
+            y = alpha * (1 - alpha * tt)
+        elif order == -1:
+            y = (alpha + 2*alpha**2*tt) * torch.exp(-alpha*tt - alpha**2 *tt**2)
+
+        
     elif example == "LO_thrust":
 
         if order == 1:
