@@ -21,8 +21,8 @@ epochs: 20000
 batch_size: 345
 lr: 0.01
 seed: 42
-m: 3
-n: 3
+m: 2
+n: 10
 
 
 device: "cuda"

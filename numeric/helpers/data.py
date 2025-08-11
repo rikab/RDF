@@ -129,17 +129,23 @@ def get_pdf_toy(alpha, example, tt, order, device):
     return y.squeeze(0)
 
 
-def read_in_data(distribution, order, device):
+def read_in_data(distribution, order, device, space="t"):
 
     if order == 1:
         order_key = "LO"
     elif order == 2:
         order_key = "NLO"
 
-    if distribution == "thrust":
-        path_to_data = "data/thrust_data.pkl"
-    elif distribution == "c_param":
-        path_to_data = "data/c_param_data.pkl"
+    if space == "t":
+        if distribution == "thrust":
+            path_to_data = "data/thrust_data.pkl"
+        elif distribution == "c_param":
+            path_to_data = "data/c_param_data.pkl"
+    elif space == "x":
+        if distribution == "thrust":
+            path_to_data = "data/LINEAR_thrust_data.pkl"
+        elif distribution == "c_param":
+            path_to_data = "data/LINEAR_c_param_data.pkl"
         
     data_dict = {}
 

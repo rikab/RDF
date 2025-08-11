@@ -8,6 +8,9 @@ import torch
 from torch.func import jacrev
 import pickle
 
+import os
+
+
 from helpers.data import get_pdf_toy, read_in_data
 from helpers.ansatz import q, eps, get_taylor_expanded_ansatz, get_factorial_cache
 
