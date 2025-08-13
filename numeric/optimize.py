@@ -12,12 +12,13 @@ import os
 
 
 from helpers.data import get_pdf_toy, read_in_data
-from helpers.ansatz import q, eps, get_taylor_expanded_ansatz, get_factorial_cache
+from helpers.ansatz import q, eps, get_factorial_cache
+from helpers.training import get_loss
 
 from torch.optim.lr_scheduler import ReduceLROnPlateau, ExponentialLR
 
 # Set PyTorch default dtype to float64
-torch.set_default_dtype(torch.float32)
+torch.set_default_dtype(torch.double)
 
 plt.style.use(
     "/global/cfs/cdirs/m3246/rikab/dimuonAD/helpers/style_full_notex.mplstyle"
@@ -58,9 +59,11 @@ if args.run_toy: # define bins on-the-fly
         t_bin_centers = 0.5 * (t_bins[1:] + t_bins[:-1])
         t_min = args.t_min
         t_max = args.t_max
+    data_dict = None
 else:
     # load in data, extract d bins
     data_dict, t_bins, t_bin_centers = read_in_data(args.distribution, args.order_to_match, device)
+    print(len(data_dict.keys()))
     t_min = torch.min(t_bin_centers)
     t_max = torch.max(t_bin_centers)
         
@@ -79,6 +82,24 @@ if args.init_random:
                 math.factorial(m + mstar) * math.factorial(n)
             ))
 
+if args.init_g_matrix_path != "none":
+    g_coeffs_init = np.load(f"output/{args.init_g_matrix_path}_g_coeffs.npy")[-1]
+    for m in range(g_coeffs_init.shape[0]):
+        for n in range(g_coeffs_init.shape[1]):
+            g_coeffs_to_fit.data[m, n] = g_coeffs_init[m,n]
+    print(f"Initializing g to {g_coeffs_to_fit} from {args.init_g_matrix_path}")
+    
+if args.init_theta_path != "none":
+    theta_init = np.load(f"output/{args.init_theta_path}_theta.npy")[-1]
+    for m in range(theta_init.shape[0]):
+        for n in range(1):
+            theta_to_fit.data[m, n] = theta_init[m,n]
+    print(f"Initializing theta to {theta_to_fit} from {args.init_theta_path}")
+
+
+
+
+"""
 elif args.init_at_answer:
     outfile_name += "_init_at_answer"
     if args.distribution == "exponential":
@@ -98,26 +119,68 @@ elif args.init_close_to_answer:
 else:
     print("Must choose initialization!")
     sys.exit()
+"""
+          
+factorial_cache_info = get_factorial_cache(g_coeffs_to_fit.shape[0], g_coeffs_to_fit.shape[1], mstar, device)
+
+if args.reroll_initialization:
+    
+    # Reroll the initialization a bunch of times to get a better starting point
+    counter = 1
+    for i in range(1000):
+        
+        loss = get_loss(args.order_to_match, args.distribution, args.batch_size, 
+                         g_coeffs_to_fit, theta_to_fit, mstar, t_min, t_max, t_bin_centers, device, factorial_cache_info,
+                        args.run_toy, args.weighted_mse_loss, data_dict)
+    
+        if i == 0:
+            best_loss = loss.item()
+            best_g_coeffs =  g_coeffs_to_fit.detach().cpu().numpy()
+            best_theta =  theta_to_fit.detach().cpu().numpy()
+        else:
+            if loss.item() < best_loss:
+                best_loss = loss.item()
+                best_g_coeffs = g_coeffs_to_fit.detach().cpu().numpy().copy()
+                best_theta = theta_to_fit.detach().cpu().numpy().copy() 
+                counter += 1
+    
+        # reinitialize the parameters
+        for m in range(args.m):
+            for n in range(args.n):
+                g_coeffs_to_fit.data[m, n] = torch.tensor(np.random.normal(0, scale= 1.0  / (
+                     math.factorial(m + mstar) * math.factorial(n) * 1
+                )), device=device, dtype=torch.float32, requires_grad=True)
+    
+                # force even n to be negative, odd n to be positive
+                if n % 2 == 0:
+                    g_coeffs_to_fit.data[m, n] = -torch.abs(g_coeffs_to_fit.data[m, n])
+                else:
+                    g_coeffs_to_fit.data[m, n] = torch.abs(g_coeffs_to_fit.data[m, n])
+    
+        theta_to_fit.data = torch.tensor(np.random.uniform(-0.1,1, size=(args.m, 1)), device=device, dtype=torch.float32, requires_grad=True)
+    
+        # Print the loss, best loss, and best coefficients
+        print(f"Iteration {i+1}: Loss = {loss.item():.6f}, Best Loss = {best_loss:.6f}, Best Theta = {best_theta}, current Theta = {theta_to_fit.detach().cpu().numpy()}, counter = {counter}")
+    
+    g_coeffs_to_fit.data = torch.tensor(best_g_coeffs, device=device, dtype=torch.float64, requires_grad=True)
+    theta_to_fit.data = torch.tensor(best_theta, device=device, dtype=torch.float64, requires_grad=True)
+
+g_coeffs_to_fit = g_coeffs_to_fit.double()
+theta_to_fit = theta_to_fit.double()    
 
 
 if not args.learn_theta:
     for m in range(args.m):
         for n in range(1):
             theta_to_fit.data[m, n] = -10.0 # large enough to not interfere with the sigmoid
+              
 
-
-g_coeffs_to_fit = g_coeffs_to_fit.float()
-theta_to_fit = theta_to_fit.float()
-          
-factorial_cache_info = get_factorial_cache(g_coeffs_to_fit.shape[0], g_coeffs_to_fit.shape[1], mstar, device)
-
-
-def train(epochs, batch_size, lr):
+def train(epochs, batch_size, lr, wd):
 
     if args.learn_theta:
-        optimizer = torch.optim.AdamW([g_coeffs_to_fit, theta_to_fit], lr=lr)
+        optimizer = torch.optim.AdamW([g_coeffs_to_fit, theta_to_fit], lr=lr, weight_decay=wd)
     else:
-        optimizer = torch.optim.AdamW([g_coeffs_to_fit], lr=lr)
+        optimizer = torch.optim.AdamW([g_coeffs_to_fit], lr=lr, weight_decay=wd)
 
     scheduler = ExponentialLR(optimizer, gamma=1)
 
@@ -135,83 +198,19 @@ def train(epochs, batch_size, lr):
 
     for epoch in tqdm(range(epochs)):
 
-
         optimizer.zero_grad()
 
-        # sample the whole batch of loc_alphas
-        if args.run_toy:
-            loc_alphas = (torch.distributions.Exponential(1 / 0.118).sample((batch_size,)).to(device))  # (B,)
-            loc_alphas = torch.clamp(loc_alphas, min=0, max=4 * np.pi)
-
-            #loc_alphas = ( torch.distributions.uniform.Uniform(low=1e-8, high=1).sample((batch_size,)) .to(device))
-            #loc_alphas = 1.0 - torch.sqrt(1.0 - loc_alphas)
-
-            # get the data pdf for the sampled loc_alphas for the entire batch
-            batch_data_pdf = get_pdf_toy(loc_alphas,args.distribution,t_bin_centers,args.order_to_match, device)  # (B, args.n_bins-1)
-        else:
-            loc_alphas_keys = np.random.choice(list(data_dict.keys()), size=batch_size, replace=False)
-            loc_alphas = torch.tensor([a for a in loc_alphas_keys]).to(device).reshape(-1, )
-            batch_data_pdf = torch.cat([data_dict[a][0] for a in loc_alphas_keys], axis=1).T
-            batch_errors_pdf = torch.cat([data_dict[a][1] for a in loc_alphas_keys], axis=1).T
-
-        # get taylor expansion ansatz for the batch
-        
-        fn = lambda a: q(
-            t_bin_centers, a, g_coeffs_to_fit, theta_to_fit, mstar, t_min, t_max, device, factorial_cache_info
-        )
-        batch_ansatz = get_taylor_expanded_ansatz(fn, alpha_zero, loc_alphas, args.order_to_match)
-
-
-        batch_data_pdf = batch_data_pdf.reshape(-1).float()
-        batch_ansatz = batch_ansatz.reshape(-1).float()
-        
-
-        if args.ratio_loss:
-
-            """
-
-            log_p = torch.log(torch.abs(batch_data_pdf)  + eps)
-            log_q = torch.log(torch.abs(batch_ansatz) + eps)
-
-
-            # Add i*pi to the log of the negative values
-            log_p = log_p + 1j * np.pi * (batch_data_pdf < 0)
-            log_q = log_q + 1j * np.pi * (batch_ansatz < 0)
-
-
-            # Take the magnitude of the difference
-            diff = torch.abs(log_p - log_q)**2
-            loss = torch.mean(torch.nan_to_num(diff))
-            """
-            ratio = batch_data_pdf / (batch_ansatz + eps)
-
-            loss = torch.pow(
-                torch.log(torch.abs(ratio) + eps), 2
-            ) + np.pi**2 * (ratio < 0)
-            loss = torch.mean(loss)
-
-        else:
-
-            if args.weighted_mse_loss:
-                batch_errors_pdf = batch_errors_pdf.reshape(-1).float()
-                rescaled_pdf = batch_data_pdf[batch_errors_pdf > 0]
-                rescaled_ansatz = batch_ansatz[batch_errors_pdf > 0]
-                rescaled_errors = batch_errors_pdf[batch_errors_pdf > 0]
-                loss = torch.mean(torch.pow(rescaled_pdf-rescaled_ansatz, 2)/torch.pow(rescaled_errors, 2))
-            else:     
-
-                loss = MSE_criterion(batch_data_pdf,batch_ansatz)
-
+        loss = get_loss(args.order_to_match, args.distribution, batch_size, 
+                     g_coeffs_to_fit, theta_to_fit, mstar, t_min, t_max, t_bin_centers, device, factorial_cache_info,
+                    args.run_toy, args.weighted_mse_loss, data_dict)
 
         loss.backward()
-
 
         # this strictly makes things worse??
         # torch.nn.utils.clip_grad_norm_(g_coeffs_to_fit, max_norm = 2.0)
 
         optimizer.step()
 
-        # technically we should call the val loss...
         scheduler.step()
 
         losses[epoch] = loss.detach().cpu().numpy()
@@ -224,7 +223,7 @@ def train(epochs, batch_size, lr):
 
 # Run training
 losses, lrs, g_coeffs_log, theta_log = train(
-    args.epochs, args.batch_size, args.lr
+    args.epochs, args.batch_size, args.lr, args.weight_decay
 )
 
 # -------------------------------------------------------------------------------
@@ -233,10 +232,10 @@ losses, lrs, g_coeffs_log, theta_log = train(
 
 fig, ax = plt.subplots(1, 4, figsize=(30, 6))
 
-if args.ratio_loss:
-    ax[0].plot(losses, label="ratio loss")
-else:
-    ax[0].plot(losses, label="MSE loss")
+#if args.ratio_loss:
+#    ax[0].plot(losses, label="ratio loss")
+#else:
+ax[0].plot(losses, label="MSE loss")
 ax[0].legend()
 ax[0].set_yscale("log")
 ax[0].set_xlabel("Epoch")
@@ -247,7 +246,7 @@ ax[0].set_xlabel("Epoch")
 from matplotlib.pyplot import cm
 
 color = iter(
-    cm.hsv(np.linspace(0, 1, g_coeffs_log.shape[1] * g_coeffs_log.shape[2]))
+    cm.hsv(np.linspace(0, 1, 2*g_coeffs_log.shape[1] * g_coeffs_log.shape[2]))
 )
 
 for m in range(g_coeffs_log.shape[1]):
@@ -260,13 +259,15 @@ ax[1].set_xlabel("Epoch")
 ax[1].set_ylabel("Coefficient value")
 
 
-color = iter(
-    cm.hsv(np.linspace(0, 1, theta_log.shape[1] * theta_log.shape[2]))
-)
 
 # -------------------------------------------------------------------------------
 # PLOT THETA
 # -------------------------------------------------------------------------------
+color = iter(
+    cm.hsv(np.linspace(0, 1, 2*theta_log.shape[1] * theta_log.shape[2]))
+)
+
+
 for m in range(theta_log.shape[1]):
     for n in range(theta_log.shape[2]):
         c = next(color)
