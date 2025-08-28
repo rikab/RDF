@@ -13,7 +13,7 @@ import os
 
 
 from helpers.data import get_pdf_toy, read_in_data
-from helpers.ansatz import q, eps, get_factorial_cache
+from helpers.ansatz import q, eps
 from helpers.training import get_loss
 
 from torch.optim.lr_scheduler import ReduceLROnPlateau, ExponentialLR
@@ -122,8 +122,6 @@ else:
     sys.exit()
 """
           
-factorial_cache_info = get_factorial_cache(g_coeffs_to_fit.shape[0], g_coeffs_to_fit.shape[1], mstar, device)
-
 if args.reroll_initialization:
     
     # Reroll the initialization a bunch of times to get a better starting point
@@ -131,7 +129,7 @@ if args.reroll_initialization:
     for i in range(1000):
         
         loss = get_loss(args.order_to_match, args.distribution, args.batch_size, 
-                         g_coeffs_to_fit, theta_to_fit, mstar, t_bin_centers, device, factorial_cache_info,
+                         g_coeffs_to_fit, theta_to_fit, mstar, t_bin_centers, device,
                         args.run_toy, args.weighted_mse_loss, data_dict)
     
         if i == 0:
@@ -202,7 +200,7 @@ def train(epochs, batch_size, lr, wd):
         optimizer.zero_grad()
 
         loss = get_loss(args.order_to_match, args.distribution, batch_size, 
-                     g_coeffs_to_fit, theta_to_fit, mstar, t_bin_centers, device, factorial_cache_info,
+                     g_coeffs_to_fit, theta_to_fit, mstar, t_bin_centers, device,
                     args.run_toy, args.weighted_mse_loss, data_dict)
 
         loss.backward()
@@ -291,7 +289,7 @@ for i, alpha in enumerate([0.148, 0.101, 0.049]):
     alpha_tensor = torch.tensor(alpha, device=device)
 
     # plot ansatz
-    ax[3].plot(tt.detach().cpu().numpy(),q(tt, alpha_tensor, g_coeffs_to_fit, theta_to_fit, mstar, device, factorial_cache_info).detach().cpu().numpy(),label="Ansatz",color=colors[i],)
+    ax[3].plot(tt.detach().cpu().numpy(),q(tt, alpha_tensor, g_coeffs_to_fit, theta_to_fit, mstar, device).detach().cpu().numpy(),label="Ansatz",color=colors[i],)
 
     if args.run_toy:
         # plot all-orders solution

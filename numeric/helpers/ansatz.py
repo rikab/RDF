@@ -78,7 +78,9 @@ def cumulative_trapezoidal(alpha, g_coeffs, theta, mstar, t_grid, device, factor
     return cum
 
 
-def q(t, alpha, g_coeffs, theta, mstar, device, factorial_cache_info):
+def q(t, alpha, g_coeffs, theta, mstar, device):
+
+    factorial_cache_info = get_factorial_cache(g_coeffs.shape[0], g_coeffs.shape[1], mstar, device)
 
     # added for 1d theta
     theta = theta.expand(-1, g_coeffs.shape[1])
