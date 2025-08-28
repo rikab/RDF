@@ -1,3 +1,4 @@
+
 import argparse
 import yaml
 import math
@@ -130,7 +131,7 @@ if args.reroll_initialization:
     for i in range(1000):
         
         loss = get_loss(args.order_to_match, args.distribution, args.batch_size, 
-                         g_coeffs_to_fit, theta_to_fit, mstar, t_min, t_max, t_bin_centers, device, factorial_cache_info,
+                         g_coeffs_to_fit, theta_to_fit, mstar, t_bin_centers, device, factorial_cache_info,
                         args.run_toy, args.weighted_mse_loss, data_dict)
     
         if i == 0:
@@ -184,7 +185,7 @@ def train(epochs, batch_size, lr, wd):
 
     scheduler = ExponentialLR(optimizer, gamma=1)
 
-    MSE_criterion = torch.nn.MSELoss()
+    
 
     losses = np.zeros((epochs, 1))
     lrs = np.zeros((epochs, 1))
@@ -201,7 +202,7 @@ def train(epochs, batch_size, lr, wd):
         optimizer.zero_grad()
 
         loss = get_loss(args.order_to_match, args.distribution, batch_size, 
-                     g_coeffs_to_fit, theta_to_fit, mstar, t_min, t_max, t_bin_centers, device, factorial_cache_info,
+                     g_coeffs_to_fit, theta_to_fit, mstar, t_bin_centers, device, factorial_cache_info,
                     args.run_toy, args.weighted_mse_loss, data_dict)
 
         loss.backward()
@@ -290,7 +291,7 @@ for i, alpha in enumerate([0.148, 0.101, 0.049]):
     alpha_tensor = torch.tensor(alpha, device=device)
 
     # plot ansatz
-    ax[3].plot(tt.detach().cpu().numpy(),q(tt, alpha_tensor, g_coeffs_to_fit, theta_to_fit, mstar, t_min, t_max, device, factorial_cache_info).detach().cpu().numpy(),label="Ansatz",color=colors[i],)
+    ax[3].plot(tt.detach().cpu().numpy(),q(tt, alpha_tensor, g_coeffs_to_fit, theta_to_fit, mstar, device, factorial_cache_info).detach().cpu().numpy(),label="Ansatz",color=colors[i],)
 
     if args.run_toy:
         # plot all-orders solution
@@ -319,6 +320,8 @@ np.save(f"output/{outfile_name}_theta", theta_log)
     
 with open(f"output/{outfile_name}_config", "wb") as ofile:
     pickle.dump(config, ofile)
+
+torch.set_printoptions(precision=16, sci_mode=False)
 
 print("Final g")
 print(g_coeffs_to_fit)
