@@ -14,7 +14,7 @@ import os
 
 from helpers.data import get_pdf_toy, read_in_data
 from helpers.ansatz import q, eps
-from helpers.training import get_loss
+from helpers.training import get_loss, train
 
 from torch.optim.lr_scheduler import ReduceLROnPlateau, ExponentialLR
 
@@ -26,20 +26,25 @@ plt.style.use(
 )
 
 
-def parse_args_dynamic(defaults):
-    parser = argparse.ArgumentParser(description="Dynamic YAML to argparse")
 
+parser_yaml = argparse.ArgumentParser()
+parser_yaml.add_argument("--config", type=str, required=True)
+# Get known args and keep the rest to parse later
+yargs, remaining_argv = parser_yaml.parse_known_args()
+
+with open(f"configs/{yargs.config}.yaml", "r") as ifile:
+    config = yaml.safe_load(ifile)
+print(f"Loaded config: {yargs.config}.yaml")
+
+def parse_args_dynamic(defaults, argv):
+    parser = argparse.ArgumentParser(description="Dynamic YAML to argparse")
     for key, value in defaults.items():
         arg_type = type(value)
         parser.add_argument(f"--{key}", type=arg_type, default=value)
+    return parser.parse_args(argv)
 
-    return parser.parse_args()
+args = parse_args_dynamic(config, remaining_argv)
 
-
-with open("args.yaml", "r") as ifile:
-    config = yaml.safe_load(ifile)
-
-args = parse_args_dynamic(config)
 mstar = args.mstar
 
 outfile_name = f"{args.distribution}_{args.order_to_match}_{args.name}"
@@ -156,7 +161,7 @@ if args.reroll_initialization:
                 else:
                     g_coeffs_to_fit.data[m, n] = torch.abs(g_coeffs_to_fit.data[m, n])
     
-        theta_to_fit.data = torch.tensor(np.random.uniform(-0.1,1, size=(args.m, 1)), device=device, dtype=torch.float32, requires_grad=True)
+        theta_to_fit.data = torch.tensor(np.random.uniform(-10.0,1, size=(args.m, 1)), device=device, dtype=torch.float32, requires_grad=True)
     
         # Print the loss, best loss, and best coefficients
         print(f"Iteration {i+1}: Loss = {loss.item():.6f}, Best Loss = {best_loss:.6f}, Best Theta = {best_theta}, current Theta = {theta_to_fit.detach().cpu().numpy()}, counter = {counter}")
@@ -174,50 +179,7 @@ if not args.learn_theta:
             theta_to_fit.data[m, n] = -10.0 # large enough to not interfere with the sigmoid
               
 
-def train(epochs, batch_size, lr, wd):
 
-    if args.learn_theta:
-        optimizer = torch.optim.AdamW([g_coeffs_to_fit, theta_to_fit], lr=lr, weight_decay=wd)
-    else:
-        optimizer = torch.optim.AdamW([g_coeffs_to_fit], lr=lr, weight_decay=wd)
-
-    scheduler = ExponentialLR(optimizer, gamma=1)
-
-    
-
-    losses = np.zeros((epochs, 1))
-    lrs = np.zeros((epochs, 1))
-    g_coeffs_log = np.zeros((epochs + 1, *g_coeffs_to_fit.shape))
-    g_coeffs_log[0] = g_coeffs_to_fit.detach().cpu().numpy()
-
-    theta_log = np.zeros((epochs + 1, *theta_to_fit.shape))
-    theta_log[0] = theta_to_fit.detach().cpu().numpy()
-
-    alpha_zero = torch.tensor([1e-12], device=device, requires_grad=True)
-
-    for epoch in tqdm(range(epochs)):
-
-        optimizer.zero_grad()
-
-        loss = get_loss(args.order_to_match, args.distribution, batch_size, 
-                     g_coeffs_to_fit, theta_to_fit, mstar, t_bin_centers, device,
-                    args.run_toy, args.weighted_mse_loss, data_dict)
-
-        loss.backward()
-
-        # this strictly makes things worse??
-        # torch.nn.utils.clip_grad_norm_(g_coeffs_to_fit, max_norm = 2.0)
-
-        optimizer.step()
-
-        scheduler.step()
-
-        losses[epoch] = loss.detach().cpu().numpy()
-        lrs[epoch] = scheduler.get_lr()[0]
-        g_coeffs_log[epoch + 1] = g_coeffs_to_fit.detach().cpu().numpy()
-        theta_log[epoch + 1] = theta_to_fit.detach().cpu().numpy()
-
-    return losses, lrs, g_coeffs_log, theta_log
 
 
 # Run training
