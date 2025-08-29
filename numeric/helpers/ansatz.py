@@ -1,7 +1,7 @@
 import torch
 import math
 
-N_integrator = 250
+N_integrator = 1000
 eps = 1e-12
 
 
@@ -78,13 +78,15 @@ def cumulative_trapezoidal(alpha, g_coeffs, theta, mstar, t_grid, device, factor
     return cum
 
 
-def q(t, alpha, g_coeffs, theta, mstar, t_min, t_max, device, factorial_cache_info):
+def q(t, alpha, g_coeffs, theta, mstar, device):
+
+    factorial_cache_info = get_factorial_cache(g_coeffs.shape[0], g_coeffs.shape[1], mstar, device)
 
     # added for 1d theta
     theta = theta.expand(-1, g_coeffs.shape[1])
 
     t_dense = torch.linspace(
-        t_min, t_max, N_integrator, device=device
+        0, 100, N_integrator, device=device
     )
     F_dense = cumulative_trapezoidal(alpha, g_coeffs, theta, mstar, t_dense, device, factorial_cache_info)
 

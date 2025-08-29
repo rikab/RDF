@@ -1,9 +1,12 @@
 import numpy as np
 import torch
 from helpers.ansatz import q, get_taylor_expanded_ansatz
+from helpers.data import get_pdf_toy
+
+MSE_criterion = torch.nn.MSELoss()
 
 def get_loss(order_to_match, distribution, batch_size, 
-             g_coeffs_to_fit, theta_to_fit, mstar, t_min, t_max, t_bin_centers, device, factorial_cache_info,
+             g_coeffs_to_fit, theta_to_fit, mstar, t_bin_centers, device,
              run_toy, mse_weighted_loss, data_dict, ratio_loss=False):
 
     alpha_zero = torch.tensor([1e-12], device=device, requires_grad=True)
@@ -25,7 +28,7 @@ def get_loss(order_to_match, distribution, batch_size,
         batch_errors_pdf = torch.cat([data_dict[a][1] for a in loc_alphas_keys], axis=1).T
 
     fn = lambda a: q(
-            t_bin_centers, a, g_coeffs_to_fit, theta_to_fit, mstar, t_min, t_max, device, factorial_cache_info
+            t_bin_centers, a, g_coeffs_to_fit, theta_to_fit, mstar, device
         )
     
     batch_ansatz = get_taylor_expanded_ansatz(fn, alpha_zero, loc_alphas, order_to_match)
