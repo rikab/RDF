@@ -8,6 +8,7 @@ init_random: true
 init_g_matrix_path: none
 init_theta_path: none
 learn_theta: true
+reroll_initialization: false
 
 ratio_loss: false
 weighted_mse_loss: false

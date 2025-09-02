@@ -4,19 +4,15 @@ import yaml
 import math
 import numpy as np
 import matplotlib.pyplot as plt
-from tqdm import tqdm
 import torch
 from torch.func import jacrev
 import pickle
 
 import os
 
-
 from helpers.data import get_pdf_toy, read_in_data
 from helpers.ansatz import q, eps
 from helpers.training import get_loss, train
-
-from torch.optim.lr_scheduler import ReduceLROnPlateau, ExponentialLR
 
 # Set PyTorch default dtype to float64
 torch.set_default_dtype(torch.double)
@@ -183,8 +179,8 @@ if not args.learn_theta:
 
 
 # Run training
-losses, lrs, g_coeffs_log, theta_log = train(
-    args.epochs, args.batch_size, args.lr, args.weight_decay
+losses, lrs, g_coeffs_log, theta_log = train(g_coeffs_to_fit, theta_to_fit,
+    args.order_to_match, args.distribution, mstar, t_bin_centers, data_dict, args.epochs, args.batch_size, args.lr, args.weight_decay, args.learn_theta, args.run_toy, args.weighted_mse_loss, device
 )
 
 # -------------------------------------------------------------------------------
