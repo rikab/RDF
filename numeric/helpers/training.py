@@ -44,10 +44,18 @@ def get_loss(order_to_match, distribution, batch_size,
 
     if mse_weighted_loss:
                 batch_errors_pdf = batch_errors_pdf.reshape(-1).double()
-                rescaled_pdf = batch_data_pdf[batch_errors_pdf > 0]
-                rescaled_ansatz = batch_ansatz[batch_errors_pdf > 0]
-                rescaled_errors = batch_errors_pdf[batch_errors_pdf > 0]
-                loss = torch.mean(torch.pow(rescaled_pdf-rescaled_ansatz, 2)/torch.pow(rescaled_errors, 2))
+
+                # Get minimum error
+                min_error = torch.min(batch_errors_pdf[batch_errors_pdf > 0])
+
+                # clip from below
+                batch_errors_pdf = torch.clamp(batch_errors_pdf, min=min_error)                
+
+                rescaled_pdf = batch_data_pdf
+                rescaled_ansatz = batch_ansatz
+                rescaled_errors = batch_errors_pdf / torch.mean(batch_errors_pdf)
+
+                loss = torch.mean(torch.pow(rescaled_pdf-rescaled_ansatz, 2)/torch.pow(rescaled_errors, 2)) / 2
     elif ratio_loss:
         """
 

@@ -17,7 +17,7 @@ def get_factorial_cache(max_M, max_N, mstar, device):
     return factorial_cache_m, factorial_cache_n, m_range, n_range
 
 
-def helper_theta(x, x0, temperature=50):
+def helper_theta(x, x0, temperature=250):
     #return torch.where(x >= 0, 1.0, 0.0)
     return torch.sigmoid(temperature * (x - x0))
 

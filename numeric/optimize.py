@@ -11,15 +11,15 @@ import pickle
 import os
 
 from helpers.data import get_pdf_toy, read_in_data
-from helpers.ansatz import q, eps
+from helpers.ansatz import q, eps, get_taylor_expanded_ansatz
 from helpers.training import get_loss, train
 
 # Set PyTorch default dtype to float64
 torch.set_default_dtype(torch.double)
 
-plt.style.use(
-    "/global/cfs/cdirs/m3246/rikab/dimuonAD/helpers/style_full_notex.mplstyle"
-)
+# plt.style.use(
+#     "/global/cfs/cdirs/m3246/rikab/dimuonAD/helpers/style_full_notex.mplstyle"
+# )
 
 
 
@@ -157,7 +157,7 @@ if args.reroll_initialization:
                 else:
                     g_coeffs_to_fit.data[m, n] = torch.abs(g_coeffs_to_fit.data[m, n])
     
-        theta_to_fit.data = torch.tensor(np.random.uniform(-10.0,1, size=(args.m, 1)), device=device, dtype=torch.float32, requires_grad=True)
+        theta_to_fit.data = torch.tensor(np.random.uniform(-0.0,5, size=(args.m, 1)), device=device, dtype=torch.float32, requires_grad=True)
     
         # Print the loss, best loss, and best coefficients
         print(f"Iteration {i+1}: Loss = {loss.item():.6f}, Best Loss = {best_loss:.6f}, Best Theta = {best_theta}, current Theta = {theta_to_fit.detach().cpu().numpy()}, counter = {counter}")
@@ -248,6 +248,17 @@ for i, alpha in enumerate([0.148, 0.101, 0.049]):
 
     # plot ansatz
     ax[3].plot(tt.detach().cpu().numpy(),q(tt, alpha_tensor, g_coeffs_to_fit, theta_to_fit, mstar, device).detach().cpu().numpy(),label="Ansatz",color=colors[i],)
+
+
+      # plot ansatz derivative
+    alpha_zero = torch.tensor(1e-12, device=device, requires_grad=True)
+    fn = lambda a: q(
+        t_bin_centers, a,  torch.tensor(g_coeffs_log[-1], device=device),  torch.tensor(theta_log[-1], device=device), mstar, device
+    )
+    batch_ansatz = get_taylor_expanded_ansatz(fn, alpha_zero, alpha_tensor, args.order_to_match)
+
+
+    ax[3].plot(t_bin_centers.detach().cpu().numpy(),batch_ansatz.detach().cpu().numpy(),label=f"Ansatz, order {args.order_to_match}",color=colors[i],linestyle="dotted")
 
     if args.run_toy:
         # plot all-orders solution
