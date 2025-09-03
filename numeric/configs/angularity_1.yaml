@@ -1,0 +1,28 @@
+distribution: angularity
+run_toy: true
+order_to_match: 1
+name: 3d
+mstar: 1
+
+init_random: true
+init_g_matrix_path: none
+init_theta_path: none
+learn_theta: true
+reroll_initialization: false
+
+ratio_loss: false
+weighted_mse_loss: false
+use_logbins: false
+n_bins: 200
+t_min: 0
+t_max: 10
+
+
+epochs: 30000
+batch_size: 512
+lr: 0.01
+weight_decay: 0.01
+seed: 42
+m: 3
+n: 3
+device: "cuda"

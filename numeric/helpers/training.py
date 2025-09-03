@@ -3,6 +3,10 @@ import torch
 from helpers.ansatz import q, get_taylor_expanded_ansatz
 from helpers.data import get_pdf_toy
 
+from torch.optim.lr_scheduler import ReduceLROnPlateau, ExponentialLR
+from tqdm import tqdm
+
+
 MSE_criterion = torch.nn.MSELoss()
 
 def get_loss(order_to_match, distribution, batch_size, 
@@ -72,3 +76,49 @@ def get_loss(order_to_match, distribution, batch_size,
 
 
     return loss
+
+
+def train(g_coeffs_to_fit, theta_to_fit, order_to_match, distribution, mstar, t_bin_centers, data_dict, epochs, batch_size, lr, wd, learn_theta, run_toy, weighted_mse_loss, device):
+
+    if learn_theta:
+        optimizer = torch.optim.AdamW([g_coeffs_to_fit, theta_to_fit], lr=lr, weight_decay=wd)
+    else:
+        optimizer = torch.optim.AdamW([g_coeffs_to_fit], lr=lr, weight_decay=wd)
+
+    scheduler = ExponentialLR(optimizer, gamma=1)
+
+    
+
+    losses = np.zeros((epochs, 1))
+    lrs = np.zeros((epochs, 1))
+    g_coeffs_log = np.zeros((epochs + 1, *g_coeffs_to_fit.shape))
+    g_coeffs_log[0] = g_coeffs_to_fit.detach().cpu().numpy()
+
+    theta_log = np.zeros((epochs + 1, *theta_to_fit.shape))
+    theta_log[0] = theta_to_fit.detach().cpu().numpy()
+
+    alpha_zero = torch.tensor([1e-12], device=device, requires_grad=True)
+
+    for epoch in tqdm(range(epochs)):
+
+        optimizer.zero_grad()
+
+        loss = get_loss(order_to_match, distribution, batch_size, 
+                     g_coeffs_to_fit, theta_to_fit, mstar, t_bin_centers, device,
+                    run_toy, weighted_mse_loss, data_dict)
+
+        loss.backward()
+
+        # this strictly makes things worse??
+        # torch.nn.utils.clip_grad_norm_(g_coeffs_to_fit, max_norm = 2.0)
+
+        optimizer.step()
+
+        scheduler.step()
+
+        losses[epoch] = loss.detach().cpu().numpy()
+        lrs[epoch] = scheduler.get_lr()[0]
+        g_coeffs_log[epoch + 1] = g_coeffs_to_fit.detach().cpu().numpy()
+        theta_log[epoch + 1] = theta_to_fit.detach().cpu().numpy()
+
+    return losses, lrs, g_coeffs_log, theta_log
