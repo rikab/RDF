@@ -1,0 +1,31 @@
+distribution: c_param
+run_toy: false
+order_to_match: 1
+name: 1d_2d
+mstar: 1
+
+init_random: true
+init_g_matrix_path: none
+init_theta_path: none
+learn_theta: true
+reroll_initialization: true
+
+ratio_loss: false
+weighted_mse_loss: true # must be false for toy
+
+use_logbins: false
+
+# these params only used for toy
+n_bins: 200
+t_min: 0
+t_max: 10
+
+
+epochs: 150000
+batch_size: 320 # must be 320 for data
+lr: 0.005
+seed: 42
+weight_decay: 0.01
+m: 1
+n: 6
+device: cuda
