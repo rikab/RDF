@@ -308,7 +308,7 @@ for i, alpha in enumerate([0.148, 0.101, 0.049]):
 ax[3].legend()
 ax[3].set_xlabel("$t$")
 ax[3].set_ylabel("Density")
-ax[2].set_ylim(-2, 2)
+ax[3].set_ylim(-2, 2)
 plt.savefig(f"plots/{outfile_name}_results.png", bbox_inches="tight")
 
 
