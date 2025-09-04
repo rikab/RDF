@@ -1,6 +1,6 @@
 distribution: thrust
 run_toy: false
-order_to_match: 1
+order_to_match: 2
 name: rikab_test
 mstar: 1
 
@@ -26,6 +26,6 @@ batch_size: 320 # must be 320 for data
 lr: 0.001
 seed: 42
 weight_decay: 0.01
-m: 1
+m: 2
 n: 6
 device: cpu

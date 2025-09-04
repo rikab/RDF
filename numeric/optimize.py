@@ -65,7 +65,6 @@ if args.run_toy: # define bins on-the-fly
 else:
     # load in data, extract d bins
     data_dict, t_bins, t_bin_centers = read_in_data(args.distribution, args.order_to_match, device)
-    print(len(data_dict.keys()))
     t_min = torch.min(t_bin_centers)
     t_max = torch.max(t_bin_centers)
         
@@ -97,6 +96,21 @@ if args.init_theta_path != "none":
         for n in range(1):
             theta_to_fit.data[m, n] = theta_init[m,n]
     print(f"Initializing theta to {theta_to_fit} from {args.init_theta_path}")
+
+
+
+# ########## Deal with 0-errors ##########
+
+for a in data_dict.keys():
+
+    y_data, y_err = data_dict[a]
+
+    # Minimum y_err
+    min_y_err = torch.min(y_err[y_err > 0])
+    y_err = torch.clamp(y_err, min=min_y_err.item())
+
+    data_dict[a] = (y_data, y_err)
+
 
 
 
@@ -157,7 +171,7 @@ if args.reroll_initialization:
                 else:
                     g_coeffs_to_fit.data[m, n] = torch.abs(g_coeffs_to_fit.data[m, n])
     
-        theta_to_fit.data = torch.tensor(np.random.uniform(-0.0,5, size=(args.m, 1)), device=device, dtype=torch.float32, requires_grad=True)
+        theta_to_fit.data = torch.tensor(np.random.uniform(0.0, 0.5, size=(args.m, 1)), device=device, dtype=torch.float32, requires_grad=True)
     
         # Print the loss, best loss, and best coefficients
         print(f"Iteration {i+1}: Loss = {loss.item():.6f}, Best Loss = {best_loss:.6f}, Best Theta = {best_theta}, current Theta = {theta_to_fit.detach().cpu().numpy()}, counter = {counter}")
@@ -168,6 +182,24 @@ if args.reroll_initialization:
 g_coeffs_to_fit = g_coeffs_to_fit.double()
 theta_to_fit = theta_to_fit.double()    
 
+# if args.order_to_match > 1:
+
+#     outfile_prev = f"{args.distribution}_{args.order_to_match - 1}_{args.name}"
+#     g_coeffs_prev = torch.tensor(np.load(f"output/{outfile_prev}_g_coeffs.npy")[-1], dtype=torch.float64)
+#     theta_prev = torch.tensor(np.load(f"output/{outfile_prev}_theta.npy")[-1], dtype=torch.float64)
+
+#     # g_coeffs_to_fit = g_coeffs_to_fit.double()
+#     # theta_to_fit = theta_to_fit.double() 
+#     # g_coeffs_prev = g_coeffs_prev.astype(np.float64)
+#     # theta_prev = theta_prev.astype(np.float64)
+
+#     print(g_coeffs_to_fit.shape, g_coeffs_prev.shape)
+
+#     g_coeffs_to_fit[:-1, :] = g_coeffs_prev
+#     theta_to_fit[:-1, :] = theta_prev
+
+print(f"Initializing g to {g_coeffs_to_fit}")
+print(f"Initializing theta to {theta_to_fit}")
 
 if not args.learn_theta:
     for m in range(args.m):
@@ -269,14 +301,14 @@ for i, alpha in enumerate([0.148, 0.101, 0.049]):
     else:
         # plot histogram
         loc_data, loc_err = data_dict[alpha]
-        ax[3].errorbar(t_bin_centers.detach().cpu().numpy(), loc_data.detach().cpu().numpy().reshape(-1,), yerr = loc_err.detach().cpu().numpy().reshape(-1,),  label="Target (data)",  color=colors[i],linestyle="dashed",)
+        ax[3].errorbar(t_bin_centers.detach().cpu().numpy(), loc_data.detach().cpu().numpy().reshape(-1,), yerr = loc_err.detach().cpu().numpy().reshape(-1,),  label="Target (data)",  color=colors[i],linestyle="dashed", alpha = 0.25)
 
 
 
 ax[3].legend()
 ax[3].set_xlabel("$t$")
 ax[3].set_ylabel("Density")
-# ax[2].set_ylim(-0.01, 0.4)
+ax[2].set_ylim(-2, 2)
 plt.savefig(f"plots/{outfile_name}_results.png", bbox_inches="tight")
 
 

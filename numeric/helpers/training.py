@@ -37,23 +37,27 @@ def get_loss(order_to_match, distribution, batch_size,
     
     batch_ansatz = get_taylor_expanded_ansatz(fn, alpha_zero, loc_alphas, order_to_match)
     
-    
+    # # Get minimum error in each batch
+    # for i in range(batch_errors_pdf.shape[0]):
+    #     min_errors = [torch.min(batch_errors_pdf_i[batch_errors_pdf_i > 0]) for batch_errors_pdf_i in batch_errors_pdf]
+    #     batch_errors_pdf[i] = torch.clamp(batch_errors_pdf[i], min=min_errors[i].item())
+
     batch_data_pdf = batch_data_pdf.reshape(-1).double()
     batch_ansatz = batch_ansatz.reshape(-1).double()
 
 
     if mse_weighted_loss:
-                batch_errors_pdf = batch_errors_pdf.reshape(-1).double()
-
-                # Get minimum error
-                min_error = torch.min(batch_errors_pdf[batch_errors_pdf > 0])
-
-                # clip from below
-                batch_errors_pdf = torch.clamp(batch_errors_pdf, min=min_error)                
+                batch_errors_pdf = batch_errors_pdf.reshape(-1).double()             
 
                 rescaled_pdf = batch_data_pdf
                 rescaled_ansatz = batch_ansatz
+
+                # rescaled_errors = torch.sqrt(1e10 * rescaled_pdf + 1)
                 rescaled_errors = batch_errors_pdf / torch.mean(batch_errors_pdf)
+
+
+                # power = 0.5
+                # rescaled_errors = torch.pow(rescaled_errors, power)
 
                 loss = torch.mean(torch.pow(rescaled_pdf-rescaled_ansatz, 2)/torch.pow(rescaled_errors, 2)) / 2
     elif ratio_loss:

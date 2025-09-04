@@ -156,7 +156,7 @@ def read_in_data(distribution, order, device, space="t"):
             y_data = loc_data_dict[alpha][f"values_{order_key}"]
             y_data = torch.tensor(y_data, device=device).reshape(-1, 1)
 
-            y_err = loc_data_dict[alpha][f"mcerr_{order_key}"]
+            y_err = np.sqrt(loc_data_dict[alpha][f"mcerr_{order_key}"] ** 2 + loc_data_dict[alpha][f"errplus_{order_key}"] ** 2)
             y_err = torch.tensor(y_err, device=device).reshape(-1, 1)
 
             data_dict[float(alpha)*1e-3] = y_data, y_err

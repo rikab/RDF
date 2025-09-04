@@ -22,6 +22,12 @@ def helper_theta(x, x0, temperature=250):
     return torch.sigmoid(temperature * (x - x0))
 
 
+def helper_ReLU(x, x0 = 0, temperature = 250):
+
+    # Softplus function
+    return torch.nn.Softplus(beta=temperature)(x - x0)
+
+
 def f(t, alpha, g_coeffs, theta, mstar, factorial_cache_info):
 
     B = t.shape[0]
@@ -32,12 +38,12 @@ def f(t, alpha, g_coeffs, theta, mstar, factorial_cache_info):
     
 
     t_exp = t.unsqueeze(1).expand(B, max_N)
+    theta_0_exp = theta[0].unsqueeze(0).expand(B, max_N)
     
     n_range_exp = n_range.unsqueeze(0).expand(B, max_N)
     
     factorial_cache_n_exp = factorial_cache_n.unsqueeze(0).expand(B, max_N)
     t_powers = (t_exp**n_range) / factorial_cache_n  # (B, max_N)
-    theta_0_exp = theta[0].unsqueeze(0).expand(B, max_N)
     g_coeffs_0_exp = g_coeffs[0].unsqueeze(0).expand(B, max_N)
     heaviside_theta_gstar = helper_theta(t_exp, theta_0_exp)
 
