@@ -16,6 +16,7 @@ from helpers.training import get_loss, train
 
 # Set PyTorch default dtype to float64
 torch.set_default_dtype(torch.double)
+torch.set_printoptions(precision=16, sci_mode=False)
 
 # plt.style.use(
 #     "/global/cfs/cdirs/m3246/rikab/dimuonAD/helpers/style_full_notex.mplstyle"
@@ -188,10 +189,13 @@ if not args.learn_theta:
         for n in range(1):
             theta_to_fit.data[m, n] = -10.0 # large enough to not interfere with the sigmoid
               
+theta_to_fit.data[0, 0] = 0.43
 
+theta_to_fit.data[1, 0] = 0.07572071393
 
 g_coeffs_to_fit = g_coeffs_to_fit.double()
 theta_to_fit = theta_to_fit.double()    
+
 
 
 # Run training
@@ -304,7 +308,6 @@ np.save(f"output/{outfile_name}_theta", theta_log)
 with open(f"output/{outfile_name}_config", "wb") as ofile:
     pickle.dump(config, ofile)
 
-torch.set_printoptions(precision=16, sci_mode=False)
 
 print("Final g")
 print(g_coeffs_to_fit)
