@@ -9,6 +9,14 @@ from tqdm import tqdm
 
 MSE_criterion = torch.nn.MSELoss()
 
+def poisson_likelihood_loss(y_pred, y_data):
+
+    return -y_pred + y_data*torch.log(y_pred) - torch.lgamma(y_data + 1)
+
+    
+
+    
+
 def get_loss(order_to_match, distribution, batch_size, 
              g_coeffs_to_fit, theta_to_fit, mstar, t_bin_centers, device,
              run_toy, mse_weighted_loss, data_dict, ratio_loss=False):
@@ -60,6 +68,8 @@ def get_loss(order_to_match, distribution, batch_size,
                 # rescaled_errors = torch.pow(rescaled_errors, power)
 
                 loss = torch.mean(torch.pow(rescaled_pdf-rescaled_ansatz, 2)/torch.pow(rescaled_errors, 2)) / 2
+
+
     elif ratio_loss:
         """
 
@@ -90,6 +100,30 @@ def get_loss(order_to_match, distribution, batch_size,
     return loss
 
 
+
+def train_one_epoch(order_to_match, distribution, batch_size, 
+                 g_coeffs_to_fit, theta_to_fit, mstar, t_bin_centers, device,
+                run_toy, weighted_mse_loss, data_dict, optimizer):
+    
+    optimizer.zero_grad()
+
+    loss = get_loss(order_to_match, distribution, batch_size, 
+                 g_coeffs_to_fit, theta_to_fit, mstar, t_bin_centers, device,
+                run_toy, weighted_mse_loss, data_dict)
+
+    loss.backward()
+
+    # this strictly makes things worse??
+    # torch.nn.utils.clip_grad_norm_(g_coeffs_to_fit, max_norm = 2.0)
+
+    optimizer.step()
+
+
+    return loss.detach().cpu().numpy()
+    
+
+
+
 def train(g_coeffs_to_fit, theta_to_fit, order_to_match, distribution, mstar, t_bin_centers, data_dict, epochs, batch_size, lr, wd, learn_theta, run_toy, weighted_mse_loss, device):
 
     if learn_theta:
@@ -111,24 +145,17 @@ def train(g_coeffs_to_fit, theta_to_fit, order_to_match, distribution, mstar, t_
 
     alpha_zero = torch.tensor([1e-12], device=device, requires_grad=True)
 
+    print(epochs)
     for epoch in tqdm(range(epochs)):
 
-        optimizer.zero_grad()
+        loss_cpu = train_one_epoch(order_to_match, distribution, batch_size, 
+                 g_coeffs_to_fit, theta_to_fit, mstar, t_bin_centers, device,
+                run_toy, weighted_mse_loss, data_dict, optimizer)
 
-        loss = get_loss(order_to_match, distribution, batch_size, 
-                     g_coeffs_to_fit, theta_to_fit, mstar, t_bin_centers, device,
-                    run_toy, weighted_mse_loss, data_dict)
+        scheduler.step() # keep this separate
 
-        loss.backward()
 
-        # this strictly makes things worse??
-        # torch.nn.utils.clip_grad_norm_(g_coeffs_to_fit, max_norm = 2.0)
-
-        optimizer.step()
-
-        scheduler.step()
-
-        losses[epoch] = loss.detach().cpu().numpy()
+        losses[epoch] = loss_cpu
         lrs[epoch] = scheduler.get_lr()[0]
         g_coeffs_log[epoch + 1] = g_coeffs_to_fit.detach().cpu().numpy()
         theta_log[epoch + 1] = theta_to_fit.detach().cpu().numpy()

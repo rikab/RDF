@@ -113,7 +113,7 @@ g_coeffs_to_fit = torch.nn.Parameter(
     torch.zeros((args.m, args.n), device=device)
 )
 #theta_to_fit = torch.nn.Parameter(torch.zeros((args.m, args.n), device=device))
-theta_to_fit = torch.nn.Parameter(torch.zeros((args.m, 1), device=device))
+theta_to_fit = torch.nn.Parameter(torch.ones((args.m, 1), device=device))
 
 
 if args.init_random:
@@ -172,7 +172,7 @@ if args.reroll_initialization:
                 else:
                     g_coeffs_to_fit.data[m, n] = torch.abs(g_coeffs_to_fit.data[m, n])
     
-        theta_to_fit.data = torch.tensor(np.random.uniform(0.0, 0.5, size=(args.m, 1)), device=device, dtype=torch.float32, requires_grad=True)
+        theta_to_fit.data = torch.tensor(np.random.uniform(0.0, 1.0, size=(args.m, 1)), device=device, dtype=torch.float32, requires_grad=True)
     
         # Print the loss, best loss, and best coefficients
         print(f"Iteration {i+1}: Loss = {loss.item():.6f}, Best Loss = {best_loss:.6f}, Best Theta = {best_theta}, current Theta = {theta_to_fit.detach().cpu().numpy()}, counter = {counter}")
