@@ -63,6 +63,13 @@ def get_pdf_toy(alpha, example, tt, order, device):
             y = (alpha + 2*alpha**2*tt) * torch.exp(-alpha*tt - alpha**2 *tt**2)
 
 
+    elif example == "theta_toy":
+        if order == 1:
+            y = alpha * helper_theta(tt, 0.5)
+        elif order == 2:
+            y = alpha * helper_theta(tt, 0.5) + alpha**2 *(tt  *helper_theta(tt, 0.25) + (tt-0.5) * helper_theta(tt, 0.5))
+        elif order == -1:
+            y = alpha * helper_theta(tt, 0.5) + alpha**2 *(tt  *helper_thetat(tt, 0.25) + (tt-0.5) * helper_theta(tt, 0.5))
 
         
     elif example == "LO_thrust":

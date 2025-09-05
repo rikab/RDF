@@ -68,20 +68,21 @@ else:
     data_dict, t_bins, t_bin_centers = read_in_data(args.distribution, args.order_to_match, device)
     t_min = torch.min(t_bin_centers)
     t_max = torch.max(t_bin_centers)
+
         
+    # ########## Deal with 0-errors ##########
+    for a in data_dict.keys():
+    
+        y_data, y_err = data_dict[a]
+    
+        # Minimum y_err
+        min_y_err = torch.min(y_err[y_err > 0])
+        y_err = torch.clamp(y_err, min=min_y_err.item())
+    
+        data_dict[a] = (y_data, y_err)
+    
+            
 
-
-# ########## Deal with 0-errors ##########
-
-for a in data_dict.keys():
-
-    y_data, y_err = data_dict[a]
-
-    # Minimum y_err
-    min_y_err = torch.min(y_err[y_err > 0])
-    y_err = torch.clamp(y_err, min=min_y_err.item())
-
-    data_dict[a] = (y_data, y_err)
 
 
 
