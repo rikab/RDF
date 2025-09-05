@@ -69,35 +69,6 @@ else:
     t_max = torch.max(t_bin_centers)
         
 
-g_coeffs_to_fit = torch.nn.Parameter(
-    torch.zeros((args.m, args.n), device=device)
-)
-#theta_to_fit = torch.nn.Parameter(torch.zeros((args.m, args.n), device=device))
-theta_to_fit = torch.nn.Parameter(torch.zeros((args.m, 1), device=device))
-
-
-if args.init_random:
-    for m in range(args.m):
-        for n in range(args.n):
-            g_coeffs_to_fit.data[m, n] = np.random.normal(loc=0.0, scale=1.0 / (
-                math.factorial(m + mstar) * math.factorial(n)
-            ))
-
-if args.init_g_matrix_path != "none":
-    g_coeffs_init = np.load(f"output/{args.init_g_matrix_path}_g_coeffs.npy")[-1]
-    for m in range(g_coeffs_init.shape[0]):
-        for n in range(g_coeffs_init.shape[1]):
-            g_coeffs_to_fit.data[m, n] = g_coeffs_init[m,n]
-    print(f"Initializing g to {g_coeffs_to_fit} from {args.init_g_matrix_path}")
-    
-if args.init_theta_path != "none":
-    theta_init = np.load(f"output/{args.init_theta_path}_theta.npy")[-1]
-    for m in range(theta_init.shape[0]):
-        for n in range(1):
-            theta_to_fit.data[m, n] = theta_init[m,n]
-    print(f"Initializing theta to {theta_to_fit} from {args.init_theta_path}")
-
-
 
 # ########## Deal with 0-errors ##########
 
@@ -136,6 +107,36 @@ else:
     print("Must choose initialization!")
     sys.exit()
 """
+
+
+g_coeffs_to_fit = torch.nn.Parameter(
+    torch.zeros((args.m, args.n), device=device)
+)
+#theta_to_fit = torch.nn.Parameter(torch.zeros((args.m, args.n), device=device))
+theta_to_fit = torch.nn.Parameter(torch.zeros((args.m, 1), device=device))
+
+
+if args.init_random:
+    for m in range(args.m):
+        for n in range(args.n):
+            g_coeffs_to_fit.data[m, n] = np.random.normal(loc=0.0, scale=1.0 / (
+                math.factorial(m + mstar) * math.factorial(n)
+            ))
+
+if args.init_g_matrix_path != "none":
+    g_coeffs_init = np.load(f"output/{args.init_g_matrix_path}_g_coeffs.npy")[-1]
+    for m in range(g_coeffs_init.shape[0]):
+        for n in range(g_coeffs_init.shape[1]):
+            g_coeffs_to_fit.data[m, n] = g_coeffs_init[m,n]
+    print(f"Initializing g to {g_coeffs_to_fit} from {args.init_g_matrix_path}")
+    
+if args.init_theta_path != "none":
+    theta_init = np.load(f"output/{args.init_theta_path}_theta.npy")[-1]
+    for m in range(theta_init.shape[0]):
+        for n in range(1):
+            theta_to_fit.data[m, n] = theta_init[m,n]
+    print(f"Initializing theta to {theta_to_fit} from {args.init_theta_path}")
+
           
 if args.reroll_initialization:
     
@@ -179,27 +180,8 @@ if args.reroll_initialization:
     g_coeffs_to_fit.data = torch.tensor(best_g_coeffs, device=device, dtype=torch.float64, requires_grad=True)
     theta_to_fit.data = torch.tensor(best_theta, device=device, dtype=torch.float64, requires_grad=True)
 
-g_coeffs_to_fit = g_coeffs_to_fit.double()
-theta_to_fit = theta_to_fit.double()    
-
-# if args.order_to_match > 1:
-
-#     outfile_prev = f"{args.distribution}_{args.order_to_match - 1}_{args.name}"
-#     g_coeffs_prev = torch.tensor(np.load(f"output/{outfile_prev}_g_coeffs.npy")[-1], dtype=torch.float64)
-#     theta_prev = torch.tensor(np.load(f"output/{outfile_prev}_theta.npy")[-1], dtype=torch.float64)
-
-#     # g_coeffs_to_fit = g_coeffs_to_fit.double()
-#     # theta_to_fit = theta_to_fit.double() 
-#     # g_coeffs_prev = g_coeffs_prev.astype(np.float64)
-#     # theta_prev = theta_prev.astype(np.float64)
-
-#     print(g_coeffs_to_fit.shape, g_coeffs_prev.shape)
-
-#     g_coeffs_to_fit[:-1, :] = g_coeffs_prev
-#     theta_to_fit[:-1, :] = theta_prev
-
-print(f"Initializing g to {g_coeffs_to_fit}")
-print(f"Initializing theta to {theta_to_fit}")
+    print(f"Initializing g to {g_coeffs_to_fit} from reroll")
+    print(f"Initializing theta to {theta_to_fit} from reroll")
 
 if not args.learn_theta:
     for m in range(args.m):
@@ -208,6 +190,8 @@ if not args.learn_theta:
               
 
 
+g_coeffs_to_fit = g_coeffs_to_fit.double()
+theta_to_fit = theta_to_fit.double()    
 
 
 # Run training

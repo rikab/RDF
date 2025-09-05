@@ -9,3 +9,4 @@ numeric/data/*
 numeric/plots/*
 numeric/output/*
 numeric/figures/*
+numeric/helpers/__pycache__/*

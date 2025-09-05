@@ -1,12 +1,12 @@
 distribution: thrust
 run_toy: false
 order_to_match: 2
-name: 2d_init_from
+name: 2d_c_from
 mstar: 1
 
 init_random: true
-init_g_matrix_path: thrust_1_1d
-init_theta_path: thrust_1_1d
+init_g_matrix_path: thrust_1_1d_c
+init_theta_path: thrust_1_1d_c
 learn_theta: true
 reroll_initialization: false
 
@@ -21,11 +21,11 @@ t_min: 0
 t_max: 10
 
 
-epochs: 200000
+epochs: 50000
 batch_size: 320 # must be 320 for data
-lr: 0.01
+lr: 0.005
 seed: 42
 weight_decay: 0.01
 m: 2
-n: 8
+n: 15
 device: cuda
