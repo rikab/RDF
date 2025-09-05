@@ -156,7 +156,13 @@ def read_in_data(distribution, order, device, space="t"):
             y_data = loc_data_dict[alpha][f"values_{order_key}"]
             y_data = torch.tensor(y_data, device=device).reshape(-1, 1)
 
-            y_err = np.sqrt(loc_data_dict[alpha][f"mcerr_{order_key}"] ** 2 + loc_data_dict[alpha][f"errplus_{order_key}"] ** 2)
+            # errors
+
+            # get the max of scale variations
+            scale_err = np.maximum(loc_data_dict[alpha][f"errplus_{order_key}"], loc_data_dict[alpha][f"errminus_{order_key}"])
+
+            # add in quadrature
+            y_err = np.sqrt(loc_data_dict[alpha][f"mcerr_{order_key}"] ** 2 + scale_err ** 2)
             y_err = torch.tensor(y_err, device=device).reshape(-1, 1)
 
             data_dict[float(alpha)*1e-3] = y_data, y_err
