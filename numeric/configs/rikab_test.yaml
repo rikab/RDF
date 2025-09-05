@@ -1,12 +1,12 @@
-distribution: c_param
+distribution: thrust
 run_toy: false
-order_to_match: 2
+order_to_match: 1
 name: rikab_test
 mstar: 1
 
 init_random: true
-init_g_matrix_path: none
-init_theta_path: none
+init_g_matrix_path: none #thrust_1_rikab_test
+init_theta_path: none # thrust_1_rikab_test
 learn_theta: true
 reroll_initialization: true
 
@@ -21,11 +21,11 @@ t_min: 0
 t_max: 10
 
 
-epochs: 10000
+epochs: 50000
 batch_size: 320 # must be 320 for data
-lr: 0.01
+lr: 0.001
 seed: 42
 weight_decay: 0.01
-m: 2
-n: 6
+m: 1
+n: 16
 device: cpu
