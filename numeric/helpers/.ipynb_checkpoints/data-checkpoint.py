@@ -3,8 +3,6 @@ import torch
 import pickle
 import jax.numpy as jnp
 
-from helpers.ansatz import helper_theta
-
 
 N_C = 3
 N_F = 5
@@ -44,16 +42,13 @@ def get_pdf_toy(alpha, example, tt, order, device):
             y = alpha.expand_as(alpha * tt) * 0 + alpha
         elif order == 2:
             y = alpha * (1 - alpha * tt)
-            
-    elif example == "rayleigh":
+    elif example == "angularity":
         if order == -1:
             y = alpha * tt * torch.exp(-alpha * tt**2 / 2)
         elif order == 1:
             y = alpha * tt
         elif order == 2:
             y = alpha * tt * (1 - alpha * tt**2 / 2)
-
-            
     elif example == "harder_exp":
         if order == 1:
             y = alpha.expand_as(alpha * tt) * 0 + alpha
@@ -61,15 +56,6 @@ def get_pdf_toy(alpha, example, tt, order, device):
             y = alpha * (1 - alpha * tt)
         elif order == -1:
             y = (alpha + 2*alpha**2*tt) * torch.exp(-alpha*tt - alpha**2 *tt**2)
-
-
-    elif example == "theta_toy":
-        if order == 1:
-            y = alpha * helper_theta(tt, 0.5)
-        elif order == 2:
-            y = alpha * helper_theta(tt, 0.5) + alpha**2 *(tt  *helper_theta(tt, 0.25) + (tt-0.5) * helper_theta(tt, 0.5))
-        elif order == -1:
-            y = alpha * helper_theta(tt, 0.5) + alpha**2 *(tt  *helper_theta(tt, 0.25) + (tt-0.5) * helper_theta(tt, 0.5))
 
         
     elif example == "LO_thrust":
