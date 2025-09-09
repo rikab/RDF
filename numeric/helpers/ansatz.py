@@ -3,8 +3,8 @@ import math
 
 import numpy as np
 
-N_integrator = 5000
-T_MAX = 50
+N_integrator = 10000
+T_MAX = 60
 eps = 1e-6
 
 
@@ -76,16 +76,13 @@ def f(t, alpha, g_coeffs, theta, mstar, factorial_cache_info):
     ##heaviside_theta_ghigher = helper_theta(t_exp, theta_1_exp) 
 
     # below code only works for order 2
-    theta_large = max(theta[0,0], theta[1,0])
-    theta_small = min(theta[0,0], theta[1,0])
-
     heaviside_theta_ghigher = torch.zeros_like(t)
 
     # left region -- zero
     # middle region: ratio
-    heaviside_theta_ghigher += ((t > theta_small) & ( t <= theta_large))*helper_theta_ratio(t, theta_small, theta_large) 
+    heaviside_theta_ghigher += ((t > theta[0,0]) & ( t <= theta[1,0]))*helper_theta_ratio(t, theta[1,0], theta[0,0]) 
     # right region
-    heaviside_theta_ghigher += (t > theta_large)*1.0
+    heaviside_theta_ghigher[t > theta[1,0]] = 1.0
     heaviside_theta_ghigher = heaviside_theta_ghigher.unsqueeze(1).expand(B, max_M - 1).unsqueeze(2).expand(B, max_M-1, max_N)
     
 
