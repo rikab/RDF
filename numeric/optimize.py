@@ -190,9 +190,8 @@ if not args.learn_theta:
         for n in range(1):
             theta_to_fit.data[m, n] = -10.0 # large enough to not interfere with the sigmoid
               
-theta_to_fit.data[0, 0] = 0.43
-
-theta_to_fit.data[1, 0] = 0.07572071393
+theta_to_fit.data[0, 0] = 0.5
+theta_to_fit.data[1, 0] = 0.25
 
 g_coeffs_to_fit = g_coeffs_to_fit.double()
 theta_to_fit = theta_to_fit.double()    

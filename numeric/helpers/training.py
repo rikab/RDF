@@ -107,11 +107,14 @@ def train_one_epoch(order_to_match, distribution, batch_size,
     
     optimizer.zero_grad()
 
+    
+
     loss = get_loss(order_to_match, distribution, batch_size, 
                  g_coeffs_to_fit, theta_to_fit, mstar, t_bin_centers, device,
                 run_toy, weighted_mse_loss, data_dict)
 
     loss.backward()
+
 
     # this strictly makes things worse??
     # torch.nn.utils.clip_grad_norm_(g_coeffs_to_fit, max_norm = 2.0)
@@ -145,14 +148,18 @@ def train(g_coeffs_to_fit, theta_to_fit, order_to_match, distribution, mstar, t_
 
     alpha_zero = torch.tensor([1e-12], device=device, requires_grad=True)
 
-    print(epochs)
-    for epoch in tqdm(range(epochs)):
+    epochs = tqdm(range(epochs))
+    for epoch in epochs:
+        
 
         loss_cpu = train_one_epoch(order_to_match, distribution, batch_size, 
                  g_coeffs_to_fit, theta_to_fit, mstar, t_bin_centers, device,
                 run_toy, weighted_mse_loss, data_dict, optimizer)
+        epochs.set_description(f"Loss: {loss_cpu}")
 
         scheduler.step() # keep this separate
+
+
 
 
         losses[epoch] = loss_cpu
