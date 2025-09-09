@@ -1,8 +1,8 @@
 import torch
 import math
 
-N_integrator = 5000
-t_max = 50.0
+N_integrator = 10000
+T_MAX = 60
 eps = 1e-6
 
 
@@ -59,7 +59,31 @@ def f(t, alpha, g_coeffs, theta, mstar, factorial_cache_info):
     t_powers_exp = t_powers.unsqueeze(1).expand(B, max_M - 1, max_N)
 
     g_1_exp = g_coeffs[1:].unsqueeze(0).expand(B, max_M - 1, max_N)
-    theta_1_exp = theta[1:].unsqueeze(0).expand(B, max_M - 1, max_N)
+
+
+    
+
+    """
+    if theta[0,0] > theta[1,0]: 
+        heaviside_theta_ghigher = helper_theta(t_exp, theta_0_exp) 
+    else:
+        heaviside_theta_ghigher = helper_theta(t_exp, theta_1_exp) 
+    """
+    #heaviside_theta_ghigher = helper_theta_ratio(t_exp, theta_1_exp, theta_0_exp) 
+    ##heaviside_theta_ghigher = helper_theta(t_exp, theta_1_exp) 
+
+    # below code only works for order 2
+    heaviside_theta_ghigher = torch.zeros_like(t)
+
+    # left region -- zero
+    # middle region: ratio
+    heaviside_theta_ghigher += ((t > theta[0,0]) & ( t <= theta[1,0]))*helper_theta_ratio(t, theta[1,0], theta[0,0]) 
+    # right region
+    heaviside_theta_ghigher[t > theta[1,0]] = 1.0
+    heaviside_theta_ghigher = heaviside_theta_ghigher.unsqueeze(1).expand(B, max_M - 1).unsqueeze(2).expand(B, max_M-1, max_N)
+    
+
+   
 
     factorial_cache_m_exp = (
         factorial_cache_m.unsqueeze(0)
