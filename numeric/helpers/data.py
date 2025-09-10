@@ -211,6 +211,12 @@ def read_in_data_JAX(distribution, order):
             y_data = jnp.array(y_data).reshape(-1, 1)
 
             y_err = loc_data_dict[alpha][f"mcerr_{order_key}"]
+
+            # get the max of scale variations
+            scale_err = np.maximum(loc_data_dict[alpha][f"errplus_{order_key}"], loc_data_dict[alpha][f"errminus_{order_key}"])
+
+            # add in quadrature
+            y_err = np.sqrt(loc_data_dict[alpha][f"mcerr_{order_key}"] ** 2 + scale_err ** 2)
             y_err = jnp.array(y_err).reshape(-1, 1)
 
             data_dict[float(alpha)*1e-3] = y_data, y_err

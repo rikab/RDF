@@ -28,7 +28,13 @@ def build_powers(base, length):
 @jax.jit
 def Theta(t):
 
-    return (t > 0)
+    beta = 100
+    return jax.nn.sigmoid(t * beta)
+
+@jax.jit
+def ReLU(x):
+    # return jnp.abs(x)
+    return x * (x > 0)
 
 @jax.jit
 def polynomial(t, alpha, params, thetas):
@@ -171,9 +177,9 @@ def taylor_expand_in_alpha(function, order):
         for i in range(order):
             ps.append(jax.grad(ps[-1], argnums=1))
 
-    def taylor_expansion(x, alpha, params):
-        near_zero = 1e-16
-        terms = jnp.array([p(x, near_zero, params) for p in ps])
+    def taylor_expansion(x, alpha, *params):
+        near_zero = 1e-12
+        terms = jnp.array([p(x, near_zero, *params) for p in ps])
         factorials = jax.scipy.special.gamma(jnp.arange(len(terms)) + 1)
 
         return jnp.sum(terms / factorials * jnp.power(alpha, jnp.arange(len(terms))))

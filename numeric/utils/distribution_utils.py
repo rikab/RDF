@@ -3,7 +3,9 @@ import jax.numpy as jnp
 from jax.experimental.ode import odeint
 import diffrax
 
-from utils.function_utils import polynomial
+from utils.function_utils import polynomial, ReLU
+
+
 
 
 def construct_cdf(function, t_func):
@@ -33,12 +35,17 @@ def f(t, alpha, g_star, g_mn, thetas):
 
     poly = polynomial(t, alpha, g_mn, thetas)
     g_star_poly = polynomial(t, alpha, g_star, thetas)
-    return -1 * g_star_poly * jnp.exp( - poly)
+    return ReLU(-1 * g_star_poly) * jnp.exp( - poly)
 
 
 
-@jax.jit
 def integrate_f(t, alpha, g_star, g_mn, thetas):
+
+
+
+    ts = jnp.linspace(0, t, 1000)
+    f_vals = jax.vmap(f, in_axes = (0, None, None, None, None))(ts, alpha, g_star, g_mn, thetas)
+    return jnp.trapz(f_vals, ts)
 
     try: 
         epsabs = epsrel = 1e-5
@@ -79,11 +86,9 @@ def integrate_f(t, alpha, g_star, g_mn, thetas):
     return term
 
 
-
 def q(t, alpha, g_star, g_mn, thetas):
 
-    return f(t, alpha, g_star, g_mn, thetas) * jnp.exp(-integrate_f(t, alpha, g_star, g_mn, thetas))
-
+    return (f(t, alpha, g_star, g_mn, thetas) * jnp.exp(-integrate_f(t, alpha, g_star, g_mn, thetas)))
 
 def log_q(t, alpha, g_star, g_mn, thetas):
 
@@ -97,3 +102,27 @@ def log_q(t, alpha, g_star, g_mn, thetas):
     term2 = -1 * integral
 
     return term1 + term2    
+
+
+
+def build_q_mstar(mstar):
+
+    def q_mstar(t, alpha, g_star, g_mn, thetas):
+
+        M, N = g_star.shape
+
+        new_M = M + mstar
+
+        g_star_0s = jnp.zeros((mstar, N))
+        new_g_star = jnp.vstack((g_star_0s, g_star))
+
+        g_mn_0s =  jnp.zeros((mstar, N))
+        new_g_mn = jnp.vstack((g_mn_0s, g_mn))
+
+        theta_0s = jnp.zeros((mstar))
+        new_thetas = jnp.concatenate((theta_0s, thetas))
+
+
+        return q(t, alpha, new_g_star, new_g_mn, new_thetas)
+    
+    return q_mstar
