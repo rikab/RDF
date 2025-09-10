@@ -9,12 +9,15 @@ from jax.scipy.signal import convolve2d
 # ########## POLYNOMIALS ##########
 # #################################
 
+
+
+
 # Necessary for jax to work with 0^0@jax.jit
 def build_powers(base, length):
    
     def body_fun(i, arr):
         # arr[i] = arr[i-1] * base
-        return arr.at[i].set(arr[i-1] * base)
+        return arr.at[i].set(arr[i-1] * base / i)
     
     # Initialize an array of zeros, then set arr[0] = 1
     arr = jnp.zeros((length,) ,  dtype = jnp.array(base).dtype)
@@ -28,25 +31,27 @@ def build_powers(base, length):
 @jax.jit
 def Theta(t):
 
-    beta = 100
+    beta = 50
     return jax.nn.sigmoid(t * beta)
 
 @jax.jit
 def ReLU(x):
     # return jnp.abs(x)
-    return x * (x > 0)
+    beta = 150
+    # return jax.nn.softplus(beta * x)/beta
+    return x * ((x > 0))
 
 @jax.jit
 def polynomial(t, alpha, params, thetas):
 
     M, N = params.shape
     
-    # Build powers of alpha: [1, alpha, alpha^2, ... alpha^(M-1)]
+    # Build powers of alpha: [1, alpha, alpha^2, ... alpha^(M-1)] (including factorials)
     alpha_powers = build_powers(alpha, M)  # shape (M,)
-    alpha_powers = alpha_powers * Theta(t - thetas)
+    alpha_powers = alpha_powers * Theta(t - thetas) 
 
     # Build powers of t: [1, t, t^2, ... t^(N-1)]
-    t_powers = build_powers(t, N)         # shape (N,)
+    t_powers = build_powers(t, N)         # shape (N,)(including factorials)
 
     poly_val = alpha_powers @ params @ t_powers
     return poly_val

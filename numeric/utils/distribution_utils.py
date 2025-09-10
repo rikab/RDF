@@ -6,7 +6,9 @@ import diffrax
 from utils.function_utils import polynomial, ReLU
 
 
-
+eps = 1e-12
+T_MAX = 60
+N_GRID = 1000
 
 def construct_cdf(function, t_func):
 
@@ -39,13 +41,49 @@ def f(t, alpha, g_star, g_mn, thetas):
 
 
 
-def integrate_f(t, alpha, g_star, g_mn, thetas):
+def make_integrate_f(alpha, g_star, g_mn, thetas):
+
+    t_dense = jnp.linspace(0.0, T_MAX, N_GRID)
+    f_vals = jax.vmap(f, in_axes=(0, None, None, None, None))(t_dense, alpha, g_star, g_mn, thetas)
+    dt = (T_MAX - 0.0) / (N_GRID - 1)
+
+    # cumtrapz with uniform spacing:
+    F_dense = jnp.concatenate([jnp.array([0.0]), jnp.cumsum(0.5 * (f_vals[:-1] + f_vals[1:]) * dt)] )
+
+    # scalar to scalar integrator that interpolates F at arbitrary t
+    def integrate_f(t):
+
+
+        # clamp t into [0, t_max]
+        t = jnp.clip(t, 0.0, T_MAX)
+
+        # locate bin k with s[k] <= t < s[k+1]
+        k = jnp.searchsorted(t_dense, t, side="right") - 1
+        k = jnp.clip(k, 0, N_GRID - 2)
+
+        t0 = t_dense[k]
+        t1 = t_dense[k+1]
+        f0 = f_vals[k]
+        f1 = f_vals[k+1]
+        F0 = F_dense[k]
+
+        # linear interpolation of f within [t0, t1]
+        w = (t - t0) / (t1 - t0 + eps)
+        f_t = (1.0 - w) * f0 + w * f1
+
+        # trapezoid on the partial cell [s0, t]:
+        return F0 + 0.5 * (f0 + f_t) * (t - t0)
+
+    return jax.jit(integrate_f)
+
+
+# def integrate_f(t, alpha, g_star, g_mn, thetas):
 
 
 
-    ts = jnp.linspace(0, t, 1000)
-    f_vals = jax.vmap(f, in_axes = (0, None, None, None, None))(ts, alpha, g_star, g_mn, thetas)
-    return jnp.trapz(f_vals, ts)
+#     ts = jnp.linspace(0, t, 1000)
+#     f_vals = jax.vmap(f, in_axes = (0, None, None, None, None))(ts, alpha, g_star, g_mn, thetas)
+#     return jnp.trapz(f_vals, ts)
 
     try: 
         epsabs = epsrel = 1e-5
@@ -88,7 +126,9 @@ def integrate_f(t, alpha, g_star, g_mn, thetas):
 
 def q(t, alpha, g_star, g_mn, thetas):
 
-    return (f(t, alpha, g_star, g_mn, thetas) * jnp.exp(-integrate_f(t, alpha, g_star, g_mn, thetas)))
+    integrate_f = make_integrate_f(alpha, g_star, g_mn, thetas)
+
+    return (f(t, alpha, g_star, g_mn, thetas) * jnp.exp(-integrate_f(t)))
 
 def log_q(t, alpha, g_star, g_mn, thetas):
 
