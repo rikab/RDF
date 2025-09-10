@@ -37,9 +37,9 @@ def Theta(t):
 @jax.jit
 def ReLU(x):
     # return jnp.abs(x)
-    beta = 150
+    beta = 250
     # return jax.nn.softplus(beta * x)/beta
-    return x * ((x > 0))
+    return x * ((x > 0)) + 1e-12
 
 @jax.jit
 def polynomial(t, alpha, params, thetas):

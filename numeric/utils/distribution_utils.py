@@ -37,7 +37,7 @@ def f(t, alpha, g_star, g_mn, thetas):
 
     poly = polynomial(t, alpha, g_mn, thetas)
     g_star_poly = polynomial(t, alpha, g_star, thetas)
-    return ReLU(-1 * g_star_poly) * jnp.exp( - poly)
+    return ReLU(-1 * g_star_poly) * jnp.exp( - poly )
 
 
 
