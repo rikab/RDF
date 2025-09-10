@@ -7,8 +7,8 @@ from utils.function_utils import polynomial, ReLU
 
 
 eps = 1e-12
-T_MAX = 60
-N_GRID = 1000
+T_MAX = 30
+N_GRID = 500
 
 def construct_cdf(function, t_func):
 

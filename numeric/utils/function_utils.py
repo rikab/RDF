@@ -31,7 +31,7 @@ def build_powers(base, length):
 @jax.jit
 def Theta(t):
 
-    beta = 50
+    beta = 500
     return jax.nn.sigmoid(t * beta)
 
 @jax.jit
@@ -39,7 +39,7 @@ def ReLU(x):
     # return jnp.abs(x)
     beta = 250
     # return jax.nn.softplus(beta * x)/beta
-    return x * ((x > 0)) + 1e-12
+    return x * ((x > 0)) #+ 1e-12
 
 @jax.jit
 def polynomial(t, alpha, params, thetas):
