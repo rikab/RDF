@@ -179,11 +179,19 @@ def read_in_data(distribution, order, device, space="t"):
             y_err = np.sqrt(loc_data_dict[alpha][f"mcerr_{order_key}"] ** 2 + scale_err ** 2)
             y_err = torch.tensor(y_err, device=device).reshape(-1, 1)
 
-            data_dict[float(alpha)*1e-3] = y_data, y_err
 
             bin_centers = torch.tensor(loc_data_dict[alpha]["bin_centers"], device=device).reshape(-1, )
-            bin_edges = np.concatenate([loc_data_dict[alpha]["bin_lows"], loc_data_dict[alpha]["bin_highs"][-1].reshape(-1,)])
+            bin_edges = np.concatenate([loc_data_dict[alpha]["bin_lows"][bin_centers > 0], loc_data_dict[alpha]["bin_highs"][-1].reshape(-1,)])
             bin_edges = torch.tensor(bin_edges, device=device).reshape(-1, )
+
+
+            y_data = y_data[bin_centers > 0]
+            y_err = y_err[bin_centers > 0]
+            bin_centers = bin_centers[bin_centers > 0]
+
+
+            data_dict[float(alpha)*1e-3] = y_data, y_err
+
 
 
     return data_dict, bin_edges, bin_centers
@@ -219,11 +227,17 @@ def read_in_data_JAX(distribution, order):
             y_err = np.sqrt(loc_data_dict[alpha][f"mcerr_{order_key}"] ** 2 + scale_err ** 2)
             y_err = jnp.array(y_err).reshape(-1, 1)
 
-            data_dict[float(alpha)*1e-3] = y_data, y_err
 
             bin_centers = jnp.array(loc_data_dict[alpha]["bin_centers"]).reshape(-1, )
-            bin_edges = jnp.concatenate([loc_data_dict[alpha]["bin_lows"], loc_data_dict[alpha]["bin_highs"][-1].reshape(-1,)])
+            bin_edges = jnp.concatenate([loc_data_dict[alpha]["bin_lows"][bin_centers > 0], loc_data_dict[alpha]["bin_highs"][-1].reshape(-1,)])
             bin_edges = jnp.array(bin_edges).reshape(-1, )
+
+            y_data = y_data[bin_centers > 0]
+            y_err = y_err[bin_centers > 0]
+            bin_centers = bin_centers[bin_centers > 0]
+
+            data_dict[float(alpha)*1e-3] = y_data, y_err
+
 
 
     return data_dict, bin_edges, bin_centers

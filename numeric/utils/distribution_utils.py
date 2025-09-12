@@ -7,8 +7,8 @@ from utils.function_utils import polynomial, ReLU
 
 
 eps = 1e-12
-T_MAX = 30
-N_GRID = 1000
+T_MAX = 10
+N_GRID = 750
 
 def construct_cdf(function, t_func):
 
@@ -32,19 +32,19 @@ def construct_pdf(function, t_func):
 
 
 
-def f(t, alpha, g_star, g_mn, thetas):
+def f(t, alpha, g_star, g_mn, thetas, thetas_coeffs, betas, betas_coeffs):
 
 
-    poly = polynomial(t, alpha, g_mn, thetas)
-    g_star_poly = polynomial(t, alpha, g_star, thetas)
+    poly = polynomial(t, alpha, g_mn, thetas_coeffs, betas_coeffs)
+    g_star_poly = polynomial(t, alpha, g_star, thetas, betas)
     return ReLU(-1 * g_star_poly) * jnp.exp( - poly )
 
 
 
-def make_integrate_f(alpha, g_star, g_mn, thetas):
+def make_integrate_f(alpha, g_star, g_mn, thetas, thetas_coeffs, betas, betas_coeffs):
 
     t_dense = jnp.linspace(0.0, T_MAX, N_GRID)
-    f_vals = jax.vmap(f, in_axes=(0, None, None, None, None))(t_dense, alpha, g_star, g_mn, thetas)
+    f_vals = jax.vmap(f, in_axes=(0, None, None, None, None, None, None, None))(t_dense, alpha, g_star, g_mn, thetas, thetas_coeffs, betas, betas_coeffs)
     dt = (T_MAX - 0.0) / (N_GRID - 1)
 
     # cumtrapz with uniform spacing:
@@ -77,19 +77,19 @@ def make_integrate_f(alpha, g_star, g_mn, thetas):
     return jax.jit(integrate_f)
 
 
-# def integrate_f(t, alpha, g_star, g_mn, thetas):
+# def integrate_f(t, alpha, g_star, g_mn, thetas, thetas_coeffs, betas, betas_coeffs):
 
 
 
 #     ts = jnp.linspace(0, t, 1000)
-#     f_vals = jax.vmap(f, in_axes = (0, None, None, None, None))(ts, alpha, g_star, g_mn, thetas)
+#     f_vals = jax.vmap(f, in_axes = (0, None, None, None, None))(ts, alpha, g_star, g_mn, thetas, thetas_coeffs, betas, betas_coeffs)
 #     return jnp.trapz(f_vals, ts)
 
     try: 
         epsabs = epsrel = 1e-5
 
         def dI_dt(t, y, args):
-            return f(t, alpha, g_star, g_mn, thetas)
+            return f(t, alpha, g_star, g_mn, thetas, thetas_coeffs, betas, betas_coeffs)
         
 
         term = diffrax.ODETerm(dI_dt,)
@@ -110,7 +110,7 @@ def make_integrate_f(alpha, g_star, g_mn, thetas):
     except:
 
         def dI_dt(t, I):
-            return f(t, alpha, g_star, g_mn, thetas)
+            return f(t, alpha, g_star, g_mn, thetas, thetas_coeffs, betas, betas_coeffs)
 
         I0 = 0.0
         ts = jnp.array([0.0, t])
@@ -124,21 +124,21 @@ def make_integrate_f(alpha, g_star, g_mn, thetas):
     return term
 
 
-def q(t, alpha, g_star, g_mn, thetas):
+def q(t, alpha, g_star, g_mn, thetas, thetas_coeffs, betas, betas_coeffs):
 
-    integrate_f = make_integrate_f(alpha, g_star, g_mn, thetas)
+    integrate_f = make_integrate_f(alpha, g_star, g_mn, thetas, thetas_coeffs, betas, betas_coeffs)
 
-    return (f(t, alpha, g_star, g_mn, thetas) * jnp.exp(-integrate_f(t)))
+    return (f(t, alpha, g_star, g_mn, thetas, thetas_coeffs, betas, betas_coeffs) * jnp.exp(-integrate_f(t)))
 
-def log_q(t, alpha, g_star, g_mn, thetas):
+def log_q(t, alpha, g_star, g_mn, thetas, thetas_coeffs, betas, betas_coeffs):
 
     # f part
-    poly = polynomial(t, alpha, g_mn, thetas)
+    poly = polynomial(t, alpha, g_mn, thetas, thetas_coeffs, betas, betas_coeffs)
     g_star_poly = polynomial(t, alpha, g_star, thetas)
     term1 = jnp.log( -1 * g_star_poly) - poly
 
     # integral part
-    integral = integrate_f(t, alpha, g_star, g_mn, thetas)
+    integral = integrate_f(t, alpha, g_star, g_mn, thetas, thetas_coeffs, betas, betas_coeffs)
     term2 = -1 * integral
 
     return term1 + term2    
@@ -147,7 +147,7 @@ def log_q(t, alpha, g_star, g_mn, thetas):
 
 def build_q_mstar(mstar):
 
-    def q_mstar(t, alpha, g_star, g_mn, thetas):
+    def q_mstar(t, alpha, g_star, g_mn, thetas, thetas_coeffs, betas, betas_coeffs):
 
         M, N = g_star.shape
 
@@ -162,7 +162,17 @@ def build_q_mstar(mstar):
         theta_0s = jnp.zeros((mstar))
         new_thetas = jnp.concatenate((theta_0s, thetas))
 
+        theta_c_0s = jnp.zeros((mstar))
+        new_thetas_c = jnp.concatenate((theta_c_0s, thetas_coeffs))
 
-        return q(t, alpha, new_g_star, new_g_mn, new_thetas)
+        beta_0s = jnp.zeros(mstar)
+        new_betas = jnp.concatenate((beta_0s, betas))
+
+        beta_c_0s = jnp.zeros(mstar)
+        new_betas_c = jnp.concatenate((beta_c_0s, betas_coeffs))
+
+
+
+        return q(t, alpha, new_g_star, new_g_mn, new_thetas, new_thetas_c, new_betas, new_betas_c)
     
     return q_mstar

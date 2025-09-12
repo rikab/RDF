@@ -29,28 +29,28 @@ def build_powers(base, length):
 
 
 # @jax.jit
-def Theta(t):
+def Theta(t, betas):
 
-    beta = 100
-    return jax.nn.sigmoid(t * beta)
+    # beta = 400
+    return jax.nn.sigmoid(t * 100 * betas)
 
 # @jax.jit
 def ReLU(x):
     # return jnp.abs(x)
     beta = 100
-    # return jnp.log(1 + jnp.exp(beta * x)) / beta
-    return jax.nn.relu(x)
-    return jax.nn.softplus(beta * x)/beta #* jnp.log(10)
+    return jnp.log(1 + jnp.exp(-beta * x)) / beta
+    # return jax.nn.relu(x)
+    # return jax.nn.softplus(beta * x)/beta #* jnp.log(10)
     return x * ((x > 0)) #+ 1e-12
 
 @jax.jit
-def polynomial(t, alpha, params, thetas):
+def polynomial(t, alpha, params, thetas, betas):
 
     M, N = params.shape
     
     # Build powers of alpha: [1, alpha, alpha^2, ... alpha^(M-1)] (including factorials)
     alpha_powers = build_powers(alpha, M)  # shape (M,)
-    alpha_powers = alpha_powers * Theta(t - thetas) 
+    alpha_powers = alpha_powers * Theta(t - thetas, betas) 
 
     # Build powers of t: [1, t, t^2, ... t^(N-1)]
     t_powers = build_powers(t, N)         # shape (N,)(including factorials)
