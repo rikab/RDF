@@ -8,7 +8,7 @@ from utils.function_utils import polynomial, ReLU, relu_polynomial
 
 eps = 1e-16
 T_MAX = 10
-N_GRID = 1500
+N_GRID = 750
 
 def construct_cdf(function, t_func):
 
@@ -35,7 +35,7 @@ def construct_pdf(function, t_func):
 def f(t, alpha, g_star, g_mn, thetas, thetas_coeffs, betas, betas_coeffs):
 
 
-    poly = polynomial(t, alpha, g_mn, thetas_coeffs, betas)
+    poly = polynomial(t, alpha, g_mn, thetas_coeffs, betas_coeffs)
     g_star_poly = relu_polynomial(t, alpha, -g_star, thetas, betas, betas_coeffs / 100)
     return g_star_poly * jnp.exp( - poly )
 
