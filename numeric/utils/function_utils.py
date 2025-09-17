@@ -38,7 +38,7 @@ def Theta(t, betas):
 def ReLU(x, betas):
 
 
-    return 2*Theta(x, 1/2)*x -x
+    return 2*Theta(x, betas)*x -x
 
     # return jnp.abs(x)
     beta = 100
