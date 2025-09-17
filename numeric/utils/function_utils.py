@@ -32,16 +32,22 @@ def build_powers(base, length):
 def Theta(t, betas):
 
     # beta = 400
+    return (t > 0)
     return jax.nn.sigmoid(t * 100 * betas)
 
 # @jax.jit
-def ReLU(x):
-    # return jnp.abs(x)
+def ReLU(x, betas):
+
+
+    # return 2*Theta(x, betas)*x -x
+
+    return jnp.abs(x)
     beta = 100
-    return jnp.log(1 + jnp.exp(-beta * x)) / beta
-    # return jax.nn.relu(x)
+    # return jnp.log(1 + jnp.exp(beta * x)) / beta
+    return jax.nn.relu(x) #- 0.001*x
     # return jax.nn.softplus(beta * x)/beta #* jnp.log(10)
-    return x * ((x > 0)) #+ 1e-12
+    return x
+    # return x * ((x > 0)) #+ 1e-12
 
 @jax.jit
 def polynomial(t, alpha, params, thetas, betas):
@@ -56,6 +62,22 @@ def polynomial(t, alpha, params, thetas, betas):
     t_powers = build_powers(t, N)         # shape (N,)(including factorials)
 
     poly_val = alpha_powers @ params @ t_powers
+    return poly_val
+
+
+@jax.jit
+def relu_polynomial(t, alpha, params, thetas, betas, betas2):
+
+    M, N = params.shape
+    
+    # Build powers of alpha: [1, alpha, alpha^2, ... alpha^(M-1)] (including factorials)
+    alpha_powers = build_powers(alpha, M)  # shape (M,)
+    alpha_powers = alpha_powers * Theta(t - thetas, betas) 
+
+    # Build powers of t: [1, t, t^2, ... t^(N-1)]
+    t_powers = build_powers(t, N)         # shape (N,)(including factorials)
+
+    poly_val = alpha_powers @ ReLU(params @ t_powers, betas2)
     return poly_val
 
 # Multiply two 2D polynomials using their coefficient arrays
@@ -185,7 +207,7 @@ def taylor_expand_in_alpha(function, order):
             ps.append(jax.grad(ps[-1], argnums=1))
 
     def taylor_expansion(x, alpha, *params):
-        near_zero = 1e-12
+        near_zero = 1e-20
         terms = jnp.array([p(x, near_zero, *params) for p in ps])
         factorials = jax.scipy.special.gamma(jnp.arange(len(terms)) + 1)
 

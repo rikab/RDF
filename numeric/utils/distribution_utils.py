@@ -3,12 +3,12 @@ import jax.numpy as jnp
 from jax.experimental.ode import odeint
 import diffrax
 
-from utils.function_utils import polynomial, ReLU
+from utils.function_utils import polynomial, ReLU, relu_polynomial
 
 
-eps = 1e-12
+eps = 1e-16
 T_MAX = 10
-N_GRID = 750
+N_GRID = 1500
 
 def construct_cdf(function, t_func):
 
@@ -35,9 +35,9 @@ def construct_pdf(function, t_func):
 def f(t, alpha, g_star, g_mn, thetas, thetas_coeffs, betas, betas_coeffs):
 
 
-    poly = polynomial(t, alpha, g_mn, thetas_coeffs, betas_coeffs)
-    g_star_poly = polynomial(t, alpha, g_star, thetas, betas)
-    return ReLU(-1 * g_star_poly) * jnp.exp( - poly )
+    poly = polynomial(t, alpha, g_mn, thetas_coeffs, betas)
+    g_star_poly = relu_polynomial(t, alpha, -g_star, thetas, betas, betas_coeffs / 100)
+    return g_star_poly * jnp.exp( - poly )
 
 
 
@@ -130,18 +130,7 @@ def q(t, alpha, g_star, g_mn, thetas, thetas_coeffs, betas, betas_coeffs):
 
     return (f(t, alpha, g_star, g_mn, thetas, thetas_coeffs, betas, betas_coeffs) * jnp.exp(-integrate_f(t)))
 
-def log_q(t, alpha, g_star, g_mn, thetas, thetas_coeffs, betas, betas_coeffs):
 
-    # f part
-    poly = polynomial(t, alpha, g_mn, thetas, thetas_coeffs, betas, betas_coeffs)
-    g_star_poly = polynomial(t, alpha, g_star, thetas)
-    term1 = jnp.log( -1 * g_star_poly) - poly
-
-    # integral part
-    integral = integrate_f(t, alpha, g_star, g_mn, thetas, thetas_coeffs, betas, betas_coeffs)
-    term2 = -1 * integral
-
-    return term1 + term2    
 
 
 
@@ -176,3 +165,21 @@ def build_q_mstar(mstar):
         return q(t, alpha, new_g_star, new_g_mn, new_thetas, new_thetas_c, new_betas, new_betas_c)
     
     return q_mstar
+
+
+
+
+
+
+def log_q(t, alpha, g_star, g_mn, thetas, thetas_coeffs, betas, betas_coeffs):
+
+    # f part
+    poly = polynomial(t, alpha, g_mn, thetas, thetas_coeffs, betas, betas_coeffs)
+    g_star_poly = polynomial(t, alpha, g_star, thetas)
+    term1 = jnp.log( -1 * g_star_poly) - poly
+
+    # integral part
+    integral = integrate_f(t, alpha, g_star, g_mn, thetas, thetas_coeffs, betas, betas_coeffs)
+    term2 = -1 * integral
+
+    return term1 + term2    
