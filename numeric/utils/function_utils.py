@@ -33,15 +33,16 @@ def Theta(t, betas):
 
     # beta = 400
     return jax.nn.sigmoid(t * 100 * betas)
+    return jax.nn.sigmoid(t / ( betas + 1e-12))
 
 # @jax.jit
 def ReLU(x, betas):
 
 
-    return 2*Theta(x, betas)*x -x
+    #return 2*Theta(x, betas)*x -x
 
     # return jnp.abs(x)
-    beta = 100
+    #beta = 100
     # return jnp.log(1 + jnp.exp(beta * x)) / beta
     return jax.nn.relu(x) + 1 * jax.nn.relu(-x) #- 0.001*x
     # return jax.nn.softplus(beta * x)/beta #* jnp.log(10)
