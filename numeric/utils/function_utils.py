@@ -29,33 +29,34 @@ def build_powers(base, length):
 
 
 # @jax.jit
-def Theta(t, betas):
+def Theta(t, temps):
 
-    # beta = 400
-    return jax.nn.sigmoid(t * 100 * betas)
+    # temp = 400
+    # print(temps)
+    return jax.nn.sigmoid(t * 100 / (temps + 1e-6))
 
 # @jax.jit
-def ReLU(x, betas):
+def ReLU(x, temps):
 
 
-    return 2*Theta(x, betas)*x -x
+    return 2*Theta(x, temps)*x -x
 
     # return jnp.abs(x)
-    beta = 100
-    # return jnp.log(1 + jnp.exp(beta * x)) / beta
+    temp = 100
+    # return jnp.log(1 + jnp.exp(temp * x)) / temp
     return jax.nn.relu(x) + 1 * jax.nn.relu(-x) #- 0.001*x
-    # return jax.nn.softplus(beta * x)/beta #* jnp.log(10)
+    # return jax.nn.softplus(temp * x)/temp #* jnp.log(10)
     return x
     # return x * ((x > 0)) #+ 1e-12
 
 @jax.jit
-def polynomial(t, alpha, params, thetas, betas):
+def polynomial(t, alpha, params, thetas, temps):
 
     M, N = params.shape
     
     # Build powers of alpha: [1, alpha, alpha^2, ... alpha^(M-1)] (including factorials)
     alpha_powers = build_powers(alpha, M)  # shape (M,)
-    alpha_powers = alpha_powers * Theta(t - thetas, betas) 
+    alpha_powers = alpha_powers * Theta(t - thetas, temps) 
 
     # Build powers of t: [1, t, t^2, ... t^(N-1)]
     t_powers = build_powers(t, N)         # shape (N,)(including factorials)
@@ -65,18 +66,18 @@ def polynomial(t, alpha, params, thetas, betas):
 
 
 @jax.jit
-def relu_polynomial(t, alpha, params, thetas, betas, betas2):
+def relu_polynomial(t, alpha, params, thetas, temps, temps2):
 
     M, N = params.shape
     
     # Build powers of alpha: [1, alpha, alpha^2, ... alpha^(M-1)] (including factorials)
     alpha_powers = build_powers(alpha, M)  # shape (M,)
-    alpha_powers = alpha_powers * Theta(t - thetas, betas) 
+    alpha_powers = alpha_powers * Theta(t - thetas, temps) 
 
     # Build powers of t: [1, t, t^2, ... t^(N-1)]
     t_powers = build_powers(t, N)         # shape (N,)(including factorials)
 
-    poly_val = alpha_powers @ ReLU(params @ t_powers, betas2)
+    poly_val = alpha_powers @ ReLU(params @ t_powers, temps2)
     return poly_val
 
 # Multiply two 2D polynomials using their coefficient arrays
