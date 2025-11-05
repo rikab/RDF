@@ -3,7 +3,7 @@ import jax.numpy as jnp
 import jax
 import math
 from jax.scipy.signal import convolve2d
-
+from functools import partial
 
 # #################################
 # ########## POLYNOMIALS ##########
@@ -12,21 +12,13 @@ from jax.scipy.signal import convolve2d
 
 
 
-# Necessary for jax to work with 0^0@jax.jit
+@partial(jax.jit, static_argnames=("length",))
 def build_powers(base, length):
-   
-    def body_fun(i, arr):
-        # arr[i] = arr[i-1] * base
-        return arr.at[i].set(arr[i-1] * base / i)
     
-    # Initialize an array of zeros, then set arr[0] = 1
-    arr = jnp.zeros((length,) ,  dtype = jnp.array(base).dtype)
-    arr = arr.at[0].set(1.0)
-    
-    # fori_loop will fill in arr[1], arr[2], ... arr[length-1]
-    arr = jax.lax.fori_loop(1, length, body_fun, arr)
-    return arr
-
+    base = jnp.asarray(base, dtype=jnp.float32)
+    i = jnp.arange(length, dtype=base.dtype)
+    step = jnp.where(i == 0, jnp.ones((), base.dtype), base / i)  # [1, b/1, b/2, ...]
+    return jnp.cumprod(step)
 
 # @jax.jit
 def Theta(t, temps):
@@ -49,7 +41,7 @@ def ReLU(x, temps):
     return x
     # return x * ((x > 0)) #+ 1e-12
 
-@jax.jit
+# @jax.jit
 def polynomial(t, alpha, params, thetas, temps):
 
     M, N = params.shape
@@ -65,7 +57,7 @@ def polynomial(t, alpha, params, thetas, temps):
     return poly_val
 
 
-@jax.jit
+# @jax.jit
 def relu_polynomial(t, alpha, params, thetas, temps, temps2):
 
     M, N = params.shape
@@ -199,21 +191,59 @@ def collapse_in_alpha(alpha, c_mn):
 # ##############################
 
 
-def taylor_expand_in_alpha(function, order):
+def taylor_expand_in_alpha(function, order, a0=1e-16):
+    """function(x, alpha, *params) -> scalar. Returns series(x, alpha, *params)."""
+    def kth_d(g, k):  # k-th derivative wrt alpha at a0
+        h = g
+        for _ in range(k):
+            h = jax.jacfwd(h)   # forward-mode is ideal for 1D alpha
+        return h(a0)
 
-    ps = [function,]
-    if order > 0:
-        for i in range(order):
-            ps.append(jax.grad(ps[-1], argnums=1))
+    def series(x, alpha, *params):
+        g = lambda a: function(x, a, *params)
+        ks  = jnp.arange(order + 1, dtype=alpha.dtype)
+        fac = jnp.cumprod(jnp.where(ks > 0, ks, 1)).astype(alpha.dtype)
+        fac = jnp.where(ks == 0, 1, fac)
 
-    def taylor_expansion(x, alpha, *params):
-        near_zero = 1e-20
-        terms = jnp.array([p(x, near_zero, *params) for p in ps])
-        factorials = jax.scipy.special.gamma(jnp.arange(len(terms)) + 1)
+        coeffs = [g(a0)] + [kth_d(g, k) for k in range(1, order + 1)]
+        coeffs = jnp.stack(coeffs).astype(alpha.dtype)
 
-        return jnp.sum(terms / factorials * jnp.power(alpha, jnp.arange(len(terms))))
-    
-    return taylor_expansion
+        return jnp.sum(coeffs * jnp.power(alpha - a0, ks) / fac)
+
+    return series
+
+# def taylor_expand_in_alpha(function, order, a0=1e-16):
+#     """Return a callable that evaluates the Taylor series in alpha up to `order` around a0.
+#        `function(x, alpha, *params)` must be scalar-valued in alpha for fixed x, params."""
+#     a0 = jnp.asarray(a0, dtype=jnp.float32)  # or match your alpha dtype
+
+#     def series(x, alpha, *params):
+#         # g: scalar -> scalar (alpha -> function(x, alpha, *params))
+#         g = lambda a: function(x, a, *params)
+
+#         # 0th term
+#         term0 = g(a0)
+
+#         # k-th derivative at a0 via repeated jvp on a scalar alpha
+#         def kth_derivative(k):
+#             v = jnp.asarray(1.0, a0.dtype)
+#             y = g(a0)
+#             for _ in range(k):
+#                 y, v = jax.jvp(g, (a0,), (v,))
+#             return v  # tangent is the k-th derivative
+
+#         # collect terms
+#         ks = jnp.arange(order + 1, dtype=alpha.dtype)
+#         # factorials without gamma (avoids inf/NaN corner cases)
+#         fac = jnp.cumprod(jnp.where(ks > 0, ks, 1)).astype(alpha.dtype)
+#         fac = jnp.where(ks == 0, 1, fac)
+
+#         derivs = [term0] + [kth_derivative(int(k)) for k in range(1, order + 1)]
+#         derivs = jnp.stack(derivs).astype(alpha.dtype)
+
+#         return jnp.sum(derivs * jnp.power(alpha - a0, ks) / fac)
+
+#     return series
 
 
 

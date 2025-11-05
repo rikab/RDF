@@ -246,6 +246,8 @@ def read_in_data_JAX(distribution, order):
         order_key = "LO"
     elif order == 2:
         order_key = "NLO"
+    elif order == 3:
+        order_key = "NNLO"
 
     if distribution == "thrust":
         path_to_data = "data/thrust_data.pkl"

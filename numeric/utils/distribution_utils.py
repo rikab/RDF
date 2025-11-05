@@ -7,8 +7,21 @@ from utils.function_utils import polynomial, ReLU, relu_polynomial
 
 
 eps = 1e-16
-T_MAX = 5
-N_GRID = 750
+T_MAX = 10
+N_GRID = 500
+
+TINY = 1e-30
+MAX_EXP = 60.0
+
+# Clipped exp to avoid overflow
+def _exp_clip(x):
+    return jnp.exp(jnp.clip(x, -MAX_EXP, MAX_EXP))
+
+
+
+# Precompute dense t grid 
+t_dense = jnp.linspace(0.0, T_MAX, N_GRID, dtype=jnp.float32)
+dt = (T_MAX - 0.0) / (N_GRID - 1)
 
 def construct_cdf(function, t_func):
 
@@ -31,104 +44,76 @@ def construct_pdf(function, t_func):
 
 
 
-
+@jax.jit
 def f(t, alpha, g_star, g_mn, thetas, thetas_coeffs, temps, temps_coeffs, temps_relu):
 
 
     poly = polynomial(t, alpha, g_mn, thetas_coeffs, temps_coeffs)
     g_star_poly = relu_polynomial(t, alpha, -g_star, thetas, temps, temps_relu)
-    return g_star_poly * jnp.exp( - poly )
+    return  g_star_poly * _exp_clip( - poly )
+
+# Helper function to evaluate integral from precomputed cache
+@jax.jit
+def _build_integral_cache(alpha, g_star, g_mn, thetas, thetas_coeffs, temps, temps_coeffs, temps_relu):
+
+
+    f_vals = jax.vmap(f, in_axes=(0, None, None, None, None, None, None, None, None))(t_dense, alpha, g_star, g_mn, thetas, thetas_coeffs, temps, temps_coeffs, temps_relu)
+
+
+    # trapezoid with uniform spacing
+    F_dense = jnp.concatenate([jnp.array([0.0], dtype=f_vals.dtype), jnp.cumsum(0.5 * (f_vals[:-1] + f_vals[1:]) * dt)])
+    
+    return t_dense, f_vals, F_dense
+
+
+@jax.jit
+def _integral_from_cache(t, t_dense, f_vals, F_dense):
+
+    dt = (T_MAX - 0.0) / (N_GRID - 1)
+    t = jnp.clip(t, 0.0, T_MAX)
+    k  = jnp.floor(t / dt).astype(jnp.int32)
+    k  = jnp.clip(k, 0, N_GRID - 2)
+
+    t0 = t_dense[k]
+    t1 = t_dense[k + 1]
+    f0 = f_vals[k]
+    f1 = f_vals[k + 1]
+    F0 = F_dense[k]
+
+    w   = (t - t0) / (t1 - t0 + eps)
+    f_t = (1.0 - w) * f0 + w * f1
+
+    return F0 + 0.5 * (f0 + f_t) * (t - t0)
 
 
 
+@jax.jit
 def make_integrate_f(alpha, g_star, g_mn, thetas, thetas_coeffs, temps, temps_coeffs, temps_relu):
 
-    t_dense = jnp.linspace(0.0, T_MAX, N_GRID)
-    f_vals = jax.vmap(f, in_axes=(0, None, None, None, None, None, None, None, None))(t_dense, alpha, g_star, g_mn, thetas, thetas_coeffs, temps, temps_coeffs, temps_relu)
-    dt = (T_MAX - 0.0) / (N_GRID - 1)
+    # Doesn't depend on t so wont get vmapped
+    t_dense, f_vals, F_dense = _build_integral_cache(alpha, g_star, g_mn, thetas, thetas_coeffs, temps, temps_coeffs, temps_relu)
 
-    # cumtrapz with uniform spacing:
-    F_dense = jnp.concatenate([jnp.array([0.0]), jnp.cumsum(0.5 * (f_vals[:-1] + f_vals[1:]) * dt)] )
-
-    # scalar to scalar integrator that interpolates F at arbitrary t
+    @jax.jit
     def integrate_f(t):
 
+        return _integral_from_cache(t, t_dense, f_vals, F_dense)
 
-        # clamp t into [0, t_max]
-        t = jnp.clip(t, 0.0, T_MAX)
-
-        # locate bin k with s[k] <= t < s[k+1]
-        k = jnp.searchsorted(t_dense, t, side="right") - 1
-        k = jnp.clip(k, 0, N_GRID - 2)
-
-        t0 = t_dense[k]
-        t1 = t_dense[k+1]
-        f0 = f_vals[k]
-        f1 = f_vals[k+1]
-        F0 = F_dense[k]
-
-        # linear interpolation of f within [t0, t1]
-        w = (t - t0) / (t1 - t0 + eps)
-        f_t = (1.0 - w) * f0 + w * f1
-
-        # trapezoid on the partial cell [s0, t]:
-        return F0 + 0.5 * (f0 + f_t) * (t - t0)
-
-    return jax.jit(integrate_f)
-
-
-# def integrate_f(t, alpha, g_star, g_mn, thetas, thetas_coeffs, temps, temps_coeffs, temps_relu):
+    return integrate_f
 
 
 
-#     ts = jnp.linspace(0, t, 1000)
-#     f_vals = jax.vmap(f, in_axes = (0, None, None, None, None))(ts, alpha, g_star, g_mn, thetas, thetas_coeffs, temps, temps_coeffs, temps_relu)
-#     return jnp.trapz(f_vals, ts)
-
-    try: 
-        epsabs = epsrel = 1e-5
-
-        def dI_dt(t, y, args):
-            return f(t, alpha, g_star, g_mn, thetas, thetas_coeffs, temps, temps_coeffs, temps_relu)
-        
-
-        term = diffrax.ODETerm(dI_dt,)
-        solver = diffrax.Dopri5()
-
-        y0 = jnp.array([0.0])
-        t0 = 0.0
-        T = t
-        saveat = diffrax.SaveAt(ts = jnp.array([T]))
-        stepsize_controller = diffrax.PIDController(rtol = epsrel, atol = epsabs)
-        dt0 = 0.01
-
-        sol = diffrax.diffeqsolve(term, solver, t0 = t0, t1 = T, y0 = y0, saveat = saveat, dt0 = dt0, stepsize_controller = stepsize_controller, max_steps = 10000)
-
-        y = sol.ys[0]
-        return y
-    
-    except:
-
-        def dI_dt(t, I):
-            return f(t, alpha, g_star, g_mn, thetas, thetas_coeffs, temps, temps_coeffs, temps_relu)
-
-        I0 = 0.0
-        ts = jnp.array([0.0, t])
-        Is = odeint(dI_dt, I0, ts)
-
-        term = Is[-1]
-        return term
-
-    # y, info = quadgk(dI_dt, [0, t], epsabs=epsabs, epsrel=epsrel)
-
-    return term
-
-
+@jax.jit
 def q(t, alpha, g_star, g_mn, thetas, thetas_coeffs, temps, temps_coeffs, temps_relu):
+    
+    # Doesn't depend on t so wont get vmapped
+    t_dense, f_vals, F_dense = _build_integral_cache(alpha, g_star, g_mn, thetas, thetas_coeffs, temps, temps_coeffs, temps_relu)
+    
+    
+    integral = _integral_from_cache(t, t_dense, f_vals, F_dense)
 
-    integrate_f = make_integrate_f(alpha, g_star, g_mn, thetas, thetas_coeffs, temps, temps_coeffs, temps_relu)
+    # log_f = jnp.log( jnp.clip(f(t, alpha, g_star, g_mn, thetas, thetas_coeffs, temps, temps_coeffs, temps_relu), a_min=TINY) )
 
-    return (f(t, alpha, g_star, g_mn, thetas, thetas_coeffs, temps, temps_coeffs, temps_relu) * jnp.exp(-integrate_f(t)))
+    return f(t, alpha, g_star, g_mn, thetas, thetas_coeffs, temps, temps_coeffs, temps_relu)  * jnp.exp(-integral)
 
 
 
@@ -172,15 +157,15 @@ def build_q_mstar(mstar):
 
 
 
-def log_q(t, alpha, g_star, g_mn, thetas, thetas_coeffs, temps, temps_coeffs, temps_relu):
+# def log_q(t, alpha, g_star, g_mn, thetas, thetas_coeffs, temps, temps_coeffs, temps_relu):
 
-    # f part
-    poly = polynomial(t, alpha, g_mn, thetas, thetas_coeffs, temps, temps_coeffs, temps_relu)
-    g_star_poly = polynomial(t, alpha, g_star, thetas)
-    term1 = jnp.log( -1 * g_star_poly) - poly
+#     # f part
+#     poly = polynomial(t, alpha, g_mn, thetas, thetas_coeffs, temps, temps_coeffs, temps_relu)
+#     g_star_poly = polynomial(t, alpha, g_star, thetas)
+#     term1 = jnp.log( -1 * g_star_poly) - poly
 
-    # integral part
-    integral = integrate_f(t, alpha, g_star, g_mn, thetas, thetas_coeffs, temps, temps_coeffs, temps_relu)
-    term2 = -1 * integral
+#     # integral part
+#     integral = integrate_f(t, alpha, g_star, g_mn, thetas, thetas_coeffs, temps, temps_coeffs, temps_relu)
+#     term2 = -1 * integral
 
-    return term1 + term2    
+#     return term1 + term2    
