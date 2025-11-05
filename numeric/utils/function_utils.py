@@ -212,6 +212,24 @@ def taylor_expand_in_alpha(function, order, a0=1e-16):
 
     return series
 
+
+def taylor_expand_in_alpha(function, order, a0=0.0):
+    def kth_d(g, k):
+        h = g
+        for _ in range(k):
+            h = jax.jacfwd(h)
+        return h(a0)
+
+    def series(x, alpha, *params):
+        g = lambda a: function(x, a, *params)  # must be scalar-valued
+        ks  = jnp.arange(order + 1, dtype=alpha.dtype)
+        fac = jnp.cumprod(jnp.where(ks > 0, ks, 1)).astype(alpha.dtype)
+        fac = jnp.where(ks == 0, 1, fac)
+        coeffs = [g(a0)] + [kth_d(g, k) for k in range(1, order + 1)]
+        coeffs = jnp.stack(coeffs).astype(alpha.dtype)
+        return jnp.sum(coeffs * jnp.power(alpha - a0, ks) / fac)
+    return series
+
 # def taylor_expand_in_alpha(function, order, a0=1e-16):
 #     """Return a callable that evaluates the Taylor series in alpha up to `order` around a0.
 #        `function(x, alpha, *params)` must be scalar-valued in alpha for fixed x, params."""
