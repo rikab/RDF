@@ -156,16 +156,15 @@ def build_q_mstar(mstar):
 
 
 
+def log_q(t, alpha, g_star, g_mn, thetas, thetas_coeffs, temps, temps_coeffs, temps_relu):
 
-# def log_q(t, alpha, g_star, g_mn, thetas, thetas_coeffs, temps, temps_coeffs, temps_relu):
+     # f part
+     poly = polynomial(t, alpha, g_mn, thetas, thetas_coeffs, temps, temps_coeffs, temps_relu)
+     g_star_poly = polynomial(t, alpha, g_star, thetas)
+     term1 = jnp.log( -1 * g_star_poly) - poly
 
-#     # f part
-#     poly = polynomial(t, alpha, g_mn, thetas, thetas_coeffs, temps, temps_coeffs, temps_relu)
-#     g_star_poly = polynomial(t, alpha, g_star, thetas)
-#     term1 = jnp.log( -1 * g_star_poly) - poly
+     # integral part
+     integral = integrate_f(t, alpha, g_star, g_mn, thetas, thetas_coeffs, temps, temps_coeffs, temps_relu)
+     term2 = -1 * integral
 
-#     # integral part
-#     integral = integrate_f(t, alpha, g_star, g_mn, thetas, thetas_coeffs, temps, temps_coeffs, temps_relu)
-#     term2 = -1 * integral
-
-#     return term1 + term2    
+     return term1 + term2    
