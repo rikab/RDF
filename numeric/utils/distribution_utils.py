@@ -7,7 +7,7 @@ from utils.function_utils import polynomial, ReLU, relu_polynomial
 
 
 eps = 1e-16
-T_MAX = 10
+T_MAX = 5
 N_GRID = 500
 
 TINY = 1e-30
