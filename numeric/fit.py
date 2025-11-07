@@ -35,6 +35,8 @@ from utils.function_utils import polynomial, taylor_expand_in_alpha
 from utils.distribution_utils import build_q_mstar
 from rikabplotlib.plot_utils import newplot
 
+from utils.fit_utils import randomize_params, freeze_lower_orders, create_mask
+
 # time
 from time import time
 
@@ -50,7 +52,6 @@ from helpers.data import get_pdf_toy_JAX, read_in_data_JAX
 mstar = 1
 m = 1
 n = 7
-starting_nuisance_n = 3
 dist = "thrust"  # "thrust" or "exponential"
 
 # number of higher orders
@@ -65,12 +66,11 @@ mult_factor = 2 if dist == "thrust" else 1
 T_MAX = 10
 gaussian_prior_param = 0.5 # std of g/m!n!
 alpha_init = 0.118
-alpha_ref = 1 # reference alpha for taylor expansion, solely to set scale
 
 
 zero_error_scale = 1   # Fraction of minimum error to set error on 0, default is 1
 lr = 0.00100
-weight_decay = 0.001
+weight_decay = 0.0001
 epochs = 50000
 batch_size = 320*1
 seed = 42
@@ -210,59 +210,9 @@ params3 = np_to_jax(params3)
 # original_params = params.copy()
 
 
-# In[5]:
-
-
-@jax.jit
-def randomize_params(params, scale=0.1, key=None):
-
-
-    k1,k2,k3,k4,k5,k6,k7 = jax.random.split(key, 7)
-
-    shape_m, shape_n = params["g_star"].shape
-
-    
-    g_star = params["g_star"].at[-m0:, :].add(scale  * jax.random.normal(k1, (m0, shape_n)))
-    g_coeffs = params["g_coeffs"].at[-m0-mstar:-mstar, :].add(scale  * jax.random.normal(k2, (m0, shape_n)))
-
-    thetas = params["thetas"].at[-m0:].add(scale * jax.random.normal(k3, (m0,)))
-    thetas = params["thetas"].at[-m0:].set(jnp.minimum(thetas[-1], thetas[-2]))
-    thetas = params["thetas"].at[-m0:].set(jnp.maximum(thetas[-m0:], -1))
-    thetas_coeffs = params["thetas_coeffs"].at[-m0-mstar:-mstar].add(scale * jax.random.normal(k4, (m0,)))
-    thetas_coeffs = params["thetas_coeffs"].at[-m0-mstar:-mstar].set(jnp.minimum(thetas_coeffs[-1-mstar], thetas_coeffs[-1-mstar-1]))
-    thetas_coeffs = params["thetas_coeffs"].at[-m0-mstar:-mstar].set(jnp.maximum(thetas_coeffs[-m0-mstar:-mstar], -1))
-
-    temps = (params["temps"].at[-m0:].add(scale * jax.random.normal(k5, (m0,))))
-    temps_coeffs = (params["temps_coeffs"].at[-m0-mstar:-mstar].add(scale * jax.random.normal(k6, (m0,))))
-    temps_positive = (params["temps_positive"].at[-m0:].add(scale  * jax.random.normal(k7, (m0,))))
-
-
-    return {
-      **params, "g_star": g_star, "g_coeffs": g_coeffs, "thetas": thetas,
-      "thetas_coeffs": thetas_coeffs, "temps": temps,
-      "temps_coeffs": temps_coeffs, "temps_positive": temps_positive
-    }
-
-
-# Randomize only the final parameters
-@jax.jit
-def randomize_last(last, scale=0.1, key=None):
-    k1,k2,k3,k4,k5,k6,k7 = jax.random.split(key, 7)
-    return {
-        **last,
-        "g_star_last":   last["g_star_last"]   + scale * jax.random.normal(k1, last["g_star_last"].shape),
-        "g_coeffs_last": last["g_coeffs_last"] + scale * jax.random.normal(k2, last["g_coeffs_last"].shape),
-        "thetas_last":   last["thetas_last"]   + scale * jax.random.normal(k3, last["thetas_last"].shape),
-        "thetas_coeffs_last": last["thetas_coeffs_last"] + scale * jax.random.normal(k4, last["thetas_coeffs_last"].shape),
-        "temps_last":    last["temps_last"]    + scale * jax.random.normal(k5, last["temps_last"].shape),
-        "temps_coeffs_last":  last["temps_coeffs_last"]  + scale * jax.random.normal(k6, last["temps_coeffs_last"].shape),
-        "temps_positive_last":  last["temps_positive_last"]  + scale * jax.random.normal(k7, last["temps_positive_last"].shape),
-    }
-
-
 # # Compilation
 
-# In[6]:
+# In[5]:
 
 
 q = build_q_mstar(mstar)
@@ -338,7 +288,7 @@ def Q_ANSATZ(ts, alpha, params):
 # 
 # ALEPH Data from https://www.hepdata.net/record/ins636645?version=1&table=Table%2054
 
-# In[7]:
+# In[6]:
 
 
 LEP = {
@@ -523,7 +473,7 @@ print(LEP["DSIG"])
 print(LEP["total_err"])
 
 
-# In[8]:
+# In[7]:
 
 
 if dist == "thrust":
@@ -692,19 +642,19 @@ plt.plot(x_bin_centers, q_vals3, color = "red", label = r"RDF $\mathcal{O}(\alph
 
 for i in range(100):
     jax_key, subkey = jax.random.split(jax_key)
-    q_vals1 = Q_ANSATZ(t_bin_centers, alpha_init, randomize_params(params1, scale = 1/1, key=subkey)) / x_bin_centers #* mult_factor
+    q_vals1 = Q_ANSATZ(t_bin_centers, alpha_init, randomize_params(params1, scale = 1/1, key=subkey, m0 = m0, mstar = mstar)) / x_bin_centers #* mult_factor
 
     plt.plot(x_bin_centers, q_vals1, color = "blue", alpha = 0.02)
 
 
 for i in range(100):
     jax_key, subkey = jax.random.split(jax_key)
-    q_vals2 = Q_ANSATZ(t_bin_centers, alpha_init, randomize_params(params2, scale = 1/1, key=subkey)) / x_bin_centers #* mult_factor
+    q_vals2 = Q_ANSATZ(t_bin_centers, alpha_init, randomize_params(params2, scale = 1/1, key=subkey, m0 = m0, mstar = mstar)) / x_bin_centers #* mult_factor
     plt.plot(x_bin_centers, q_vals2, color = "purple", alpha = 0.02)
 
 for i in range(100):
     jax_key, subkey = jax.random.split(jax_key)
-    q_vals3 = Q_ANSATZ(t_bin_centers, alpha_init, randomize_params(params3, scale = 1/1, key=subkey)) / x_bin_centers #* mult_factor
+    q_vals3 = Q_ANSATZ(t_bin_centers, alpha_init, randomize_params(params3, scale = 1/1, key=subkey, m0 = m0, mstar = mstar)) / x_bin_centers #* mult_factor
     plt.plot(x_bin_centers, q_vals3, color = "red", alpha = 0.02)
 
 # plt.plot(x_bin_centers, q_taylor_vals)
@@ -726,7 +676,7 @@ plt.savefig(f"figures/{dist}_data.pdf")
 
 # # Loss
 
-# In[9]:
+# In[8]:
 
 
 xLEP_bin_centers = jnp.array(xLEP_bin_centers)
@@ -736,110 +686,14 @@ yLEPs, yLEP_errs = jnp.array(yLEPs), jnp.array(yLEP_errs)
 factorials = jnp.array(factorials)
 
 
-# In[10]:
+# In[ ]:
 
 
-# Function to freeze lower orders so that only the highest order is trained
-
-@jax.jit
-def freeze_lower_orders(params, original_params):
-    # copy refs
-    g_star, g_coeffs = params["g_star"], params["g_coeffs"]
-    thetas, thetas_coeffs = params["thetas"], params["thetas_coeffs"]
-    temps, temps_coeffs = params["temps"], params["temps_coeffs"]
-    temps_positive = params["temps_positive"]
-
-    # indices
-
-    m_end = -m0
-    c_end = -m0 - mstar
-
-    # stop grad through all orders <= (m-1) by copying originals and stopping grad
-    g_star = g_star.at[:m_end].set(jax.lax.stop_gradient(original_params["g_star"][:m_end]))
-    g_coeffs = g_coeffs.at[:c_end].set(jax.lax.stop_gradient(original_params["g_coeffs"][:c_end]))
-    thetas = thetas.at[:m_end].set(jax.lax.stop_gradient(original_params["thetas"][:m_end]))
-    thetas_coeffs = thetas_coeffs.at[:c_end].set(jax.lax.stop_gradient(original_params["thetas_coeffs"][:c_end]))
-    temps = temps.at[:m_end].set(jax.lax.stop_gradient(original_params["temps"][:m_end]))
-    temps_coeffs = temps_coeffs.at[:c_end].set(jax.lax.stop_gradient(original_params["temps_coeffs"][:c_end]))
-    temps_positive = temps_positive.at[:m_end].set(jax.lax.stop_gradient(original_params["temps_positive"][:m_end]))
-
-    out = dict(params)
-    out["g_star"] = g_star
-    out["g_coeffs"] = g_coeffs
-    out["thetas"] = thetas
-    out["thetas_coeffs"] = thetas_coeffs
-    out["temps"] = temps
-    out["temps_coeffs"] = temps_coeffs
-    out["temps_positive"] = temps_positive
-    
-    return out
 
 
-# In[11]:
 
+# In[9]:
 
-# Mask parameters:
-
-def create_mask(params):
-
-    # Initialize mask
-    mask = jax.tree_map(lambda x: jnp.ones_like(x, dtype = bool), params)
-
-    # Set stuff to False
-    rows = params["g_coeffs"].shape[0]
-    mask["g_star"] = mask["g_star"].at[:-m0].set(False)
-    mask["thetas"] = mask["thetas"].at[:-m0].set(False)
-    mask["temps"] = mask["temps"].at[:-m0].set(False)
-    mask["temps_positive"] = mask["temps_positive"].at[:-m0].set(False)
-
-    mask["g_coeffs"] = mask["g_coeffs"].at[:-m0-mstar].set(False)
-    mask["thetas_coeffs"] = mask["thetas_coeffs"].at[:-m0-mstar].set(False)
-    mask["temps_coeffs"] = mask["temps_coeffs"].at[:-m0-mstar].set(False)
-
-    mask["g_coeffs"] = mask["g_coeffs"].at[rows-mstar:].set(False)
-    mask["thetas_coeffs"] = mask["thetas_coeffs"].at[rows-mstar:].set(False)
-    mask["temps_coeffs"] = mask["temps_coeffs"].at[rows-mstar:].set(False)
-
-    return mask
-
-
-# In[12]:
-
-
-# Helpers to pack/unpack only the last order's parameters for optimization
-
-def pack_last_order(params):
-
-    return {
-        "g_star_last": params["g_star"][-1],
-        "g_coeffs_last": params["g_coeffs"][-1-mstar],
-        "thetas_last": params["thetas"][-1],
-        "thetas_coeffs_last": params["thetas_coeffs"][-1-mstar],
-        "temps_last": params["temps"][-1],
-        "temps_coeffs_last": params["temps_coeffs"][-1-mstar],
-        "temps_positive_last": params["temps_positive"][-1],
-    }
-
-def unpack_into_params(last, original_params):
-    
-    p = dict(original_params)
-    p["g_star"] = p["g_star"].at[-1].set(last["g_star_last"])
-    p["g_coeffs"] = p["g_coeffs"].at[-1-mstar].set(last["g_coeffs_last"])
-    p["thetas"] = p["thetas"].at[-1].set(last["thetas_last"])
-    p["thetas_coeffs"] = p["thetas_coeffs"].at[-1-mstar].set(last["thetas_coeffs_last"])
-    p["temps"] = p["temps"].at[-1].set(last["temps_last"])
-    p["temps_coeffs"] = p["temps_coeffs"].at[-1-mstar].set(last["temps_coeffs_last"])
-    p["temps_positive"] = p["temps_positive"].at[-1].set(last["temps_positive_last"])
-    return p
-
-# def project_last(last):
-#     last = dict(last)
-#     last["g_star_last"] = -jnp.softplus(last["g_star_last"])
-#     last["g_coeffs_last"] = -jnp.softplus(last["g_coeffs_last"])
-#     last["temps_last"] = jnp.clip(last["temps_last"], *beta_limits)
-#     last["temps_coeffs_last"] = jnp.clip(last["temps_coeffs_last"], *beta_limits)
-#     last["temps_positive_last"] = jnp.clip(last["temps_positive_last"], *beta_limits)
-#     return last
 
 def _finite(x, repl=0.0):
     
@@ -847,7 +701,7 @@ def _finite(x, repl=0.0):
     return x_clean + jax.lax.stop_gradient(x - x_clean)
 
 
-# In[13]:
+# In[10]:
 
 
 # Integration Helpers
@@ -878,14 +732,14 @@ t_points = jnp.concatenate([t_k1, t_k2, t_k3], axis=0)
 w_points = jnp.concatenate([w1 * tR, w2 * tR, w2 * tR], axis=0)
 
 
-# In[14]:
+# In[11]:
 
 
 # Weighted MSE
 @jax.jit
 def loss_function(params, alpha, ys, yerrs, original_params):
 
-    params = freeze_lower_orders(params, original_params)
+    params = freeze_lower_orders(params, original_params, m0, mstar)
 
     # No integral [#COMMENT OUT IF USING INTEGRAL]
     y_preds = _finite(Q_ANSATZ(tLEP_bin_centers, alpha, params)) / xLEP_bin_centers
@@ -909,8 +763,7 @@ def loss_function(params, alpha, ys, yerrs, original_params):
     g_star = params["g_star"].at[-m0:].set(params["g_star"][-m0:] / ascale[-m0:] * tscale)
     g_coeffs = params["g_coeffs"].at[-m0-mstar:-mstar].set(params["g_coeffs"][-m0-mstar:-mstar] / ascale[-m0-mstar:-mstar] * tscale)
 
-    # loss += _finite(jnp.sum((g_coeffs[-2] * (factorials[-1]))**2
-    #                                + (g_star[-1] * (factorials[-1]))**2) /2 / gaussian_prior_param**2 )
+
 
     idx0 = g_star.shape[0] - m0
     loss += _finite(jnp.sum((g_coeffs[idx0-mstar:-mstar] * factorials[idx0-mstar:g_star.shape[0]-mstar])**2 + (g_star[idx0:]   * factorials[idx0:g_star.shape[0]])**2) / 2 / (gaussian_prior_param**2))
@@ -919,98 +772,11 @@ def loss_function(params, alpha, ys, yerrs, original_params):
 
     return loss
 
-def residuals(params, alpha, ys, yerrs, original_params):
-    # model residuals
-    y_pred = Q_ANSATZ(tLEP_bin_centers, alpha, freeze_lower_orders(params, original_params)) / xLEP_bin_centers
-    r_data = (y_pred - ys) / yerrs
-
-    # Gaussian prior residuals 
-    orders = jnp.arange(params["g_star"].shape[0]) + mstar
-    ascale = ((alpha / twopi) ** orders)[:, None]
-    g_star   = params["g_star"].at[-m0:].set(params["g_star"][-m0:] / ascale[-m0:])
-    g_coeffs = params["g_coeffs"].at[-m0-mstar:-mstar].set(params["g_coeffs"][-m0-mstar:-mstar] / ascale[-m0-mstar:-mstar])
-
-    idx0 = g_star.shape[0] - m0
-    r_prior = jnp.concatenate([
-        (g_coeffs[idx0-mstar:-mstar] * factorials[idx0-mstar:g_star.shape[0]-mstar]).ravel(),
-        (g_star[idx0:]               * factorials[idx0:g_star.shape[0]]).ravel()
-    ]) / gaussian_prior_param
-
-    return jnp.concatenate([r_data, r_prior])
-
-
-
-# Loss for the last order only for speed
-@jax.jit
-def loss_last(last, alpha, ys, yerrs, original_params):
-    
-    params_full = unpack_into_params(last, original_params)
-    return loss_function(params_full, alpha, ys, yerrs, original_params)
-
-
-# # Scan over alphas
-
-# In[15]:
-
-
-alphas = jnp.linspace(0.001, 1, 20000)
-
-l1s = []
-l2s = []
-l3s = []
-
-
-
-for a in alphas:
-
-    l1s.append(loss_function(params1, a, yLEPs, yLEP_errs, params1))
-    l2s.append(loss_function(params2, a, yLEPs, yLEP_errs, params2))
-    l3s.append(loss_function(params3, a, yLEPs, yLEP_errs, params3))
-
-
-l1s = np.array(l1s)
-l2s = np.array(l2s)
-l3s = np.array(l3s)
-
-
-print(l1s)
-print(l2s)
-
-fig, ax = newplot("full")
-plt.plot(alphas, 2 * (l1s - np.min(l1s)), color = "blue")
-plt.plot(alphas, 2 * (l2s - np.min(l2s)), color = "purple")
-plt.plot(alphas, 2 * (l3s - np.min(l3s)), color = "red")
-plt.xlabel(r"$\alpha_s$")
-plt.ylabel(r"-2$L$")
-
-plt.yscale("log")
-
-
-fig, ax = newplot("full")
-plt.errorbar(xLEP_bin_centers, yLEPs, yerr=yLEP_errs, xerr = xLEP_bin_widths, fmt='o', color='black', lw=1, capsize=2, label = "ALEPH Data")
-best_alpha = alphas[np.argmin(l2s)]
-print(best_alpha)
-
-
-q_vals2 = Q_ANSATZ(tLEP_bin_centers, alpha_init, params2) / xLEP_bin_centers #* mult_factor
-q_vals2best = Q_ANSATZ(tLEP_bin_centers, best_alpha, params2) / xLEP_bin_centers #* mult_factor
-
-diffs = ((yLEPs - q_vals2) / yLEP_errs) **2
-diffsbest = ((yLEPs - q_vals2best) / yLEP_errs)**2
-
-plt.plot(xLEP_bin_centers, q_vals2, color = "purple", label = r"RDF $\mathcal{O}(\alpha_s^2)$")
-plt.plot(xLEP_bin_centers, q_vals2best, color = "purple", label = r"RDF $\mathcal{O}(\alpha_s^2)$", ls = "--")
-
-plt.yscale("log")
-
-fig, ax = newplot("full")
-plt.plot(xLEP_bin_centers, diffs, color = "purple")
-plt.plot(xLEP_bin_centers, diffsbest, color = "purple", ls = "--")
 
 
 # 
 
-# In[16]:
+# In[12]:
 
 
 @jax.jit
@@ -1048,6 +814,10 @@ def projector(params, original_params):
     temps_coeffs = temps_coeffs.at[g_coeffs.shape[0]-mstar:,].set(1e-1)  # Current order doesn't count
 
 
+    # # Forget learning thetas
+    # thetas = thetas.at[-m0:].set(-1)
+    # thetas_coeffs = thetas_coeffs.at[-m0-mstar:-mstar].set(-1)
+
 
     # Restore the original parameters 
     g_coeffs_init = original_params["g_coeffs"]
@@ -1080,7 +850,28 @@ def projector(params, original_params):
     return params
 
 
-# In[17]:
+# In[13]:
+
+
+def lbfgs_fun(p, a, original_params):
+    # p_proj = projector(p, original_params)
+    return loss_function(p, a, yLEPs, yLEP_errs, original_params)
+
+
+def _get_lbfgs(maxiter=2500, tol=1e-8, history_size=50, maxls=125):
+    return jaxopt.LBFGS(
+        fun=lbfgs_fun,
+        value_and_grad=False,
+        maxiter=maxiter,
+        tol=tol,
+        linesearch="zoom",
+        maxls=maxls,
+        history_size=history_size,
+        jit=True,   
+    )
+
+
+# In[14]:
 
 
 def _nan_guard_tree(tree):
@@ -1098,7 +889,8 @@ def _get_train_step(lr, wd):
         # Loosen errors
         median_error = jnp.median(yLEP_errs)
         # tau = jnp.exp(-10 * epoch / total_epochs) * median_error
-        tau = 0 #jnp.where(epoch < total_epochs//2, median_error * 0.5 * (1 - epoch/(total_epochs//2)), 0.0)
+        # tau = jnp.where(epoch < total_epochs//2, median_error * 0.5 * (1 - epoch/(total_epochs//2)), 0.0)
+        tau = 0
         effective_error = jnp.sqrt(yLEP_errs**2 + tau**2)
 
 
@@ -1107,7 +899,7 @@ def _get_train_step(lr, wd):
 
         updates, opt_state = opt.update(grad_loss, opt_state, params=params)
 
-        mask = create_mask(params)
+        mask = create_mask(params, m0, mstar)
         updates = jax.tree_map(lambda u, m: jnp.where(m, u, 0), updates, mask)
 
         params = optax.apply_updates(params, updates)
@@ -1141,6 +933,8 @@ def _get_run_chunk(lr: float, wd: float):
 
     return run_chunk, opt
 
+tiny_solver = _get_lbfgs(maxiter=20, tol=1e-6, history_size=20, maxls=20)
+
 
 @partial(jax.jit, static_argnames=("bogo_epochs","population"))
 def bogo_init_batched(params, best_params, best_loss, alpha, bogo_epochs, bogo_scale, population, jax_key, original_params):
@@ -1160,21 +954,47 @@ def bogo_init_batched(params, best_params, best_loss, alpha, bogo_epochs, bogo_s
         keys = jax.random.split(subkey, population)
 
         def make_one(k):
-            p = randomize_params(best_params, scale=scale, key=k)
+            p = randomize_params(best_params, scale=scale, key=k, m0 = m0, mstar = mstar)
             return projector(p, original_params)
 
         Ps = jax.vmap(make_one)(keys)
 
         # losses for all K in parallel
         median_error = jnp.median(yLEP_errs)
-        tau = median_error * (1.0 - i / bogo_epochs) * 0.5         
+        tau = 0 #median_error * (1.0 - i / bogo_epochs) * 0.5         
         effective_error = jnp.sqrt(yLEP_errs**2 + tau**2)
         losses = jax.vmap(lambda p: loss_function(p, alpha, yLEPs, effective_error, original_params))(Ps)
-
+        
         # best of this batch
         argmin = jnp.argmin(losses)
         Pbest = jax.tree_map(lambda x: x[argmin], Ps)
         Lbest = losses[argmin]
+
+        # # Run tiny LBFGS from batch K best
+        # TOPK = 8
+        # k = int(min(population, TOPK))
+        # kth = max(0, k - 1)
+        # topk_idx = jnp.argpartition(losses, kth)[:k]
+
+        # def refine_loop(carry, j):
+        #     best_p, best_l = carry
+        #     idx = topk_idx[j]
+        #     pj = jax.tree_map(lambda x: x[idx], Ps)
+        #     pref, _ = tiny_solver.run(pj, alpha, original_params)
+        #     lj = loss_function(pref, alpha, yLEPs, effective_error, original_params)
+        #     improved = lj < best_l
+        #     best_p = jax.tree_map(lambda a, b: jnp.where(improved, b, a), best_p, pref)
+        #     best_l = jnp.where(improved, lj, best_l)
+        #     return (best_p, best_l), None
+        
+        # (ref_p, ref_l), _ = jax.lax.scan(lambda c, j: refine_loop(c, j),
+        #                          (Pbest, Lbest),
+        #                          jnp.arange(k))
+
+        # take_refined = ref_l < Lbest
+        # Pbest = jax.tree_map(lambda r, b: jnp.where(take_refined, r, b), ref_p, Pbest)
+        # Lbest = jnp.where(take_refined, ref_l, Lbest)
+        
 
         # compare batch-best to global best
         better = Lbest < best_loss
@@ -1269,7 +1089,7 @@ def train(alpha, init_params, epochs, lr, jax_key,
             for _ in range(50):
                 jax_key, subkey = jax.random.split(jax_key)
                 q_vals1 = Q_ANSATZ(tLEP_bin_centers, alpha,
-                                   randomize_params(params, scale=bogo_scale, key = subkey)
+                                   randomize_params(params, scale=bogo_scale, key = subkey, m0 = m0, mstar = mstar)
                                    ) / xLEP_bin_centers
                 plt.plot(xLEP_bin_centers, q_vals1, color=order_colors[m], alpha=0.1)
 
@@ -1344,25 +1164,7 @@ def train(alpha, init_params, epochs, lr, jax_key,
     return float(np.min(losses)), best_params_out, np.array(losses), params_log
 
 
-# In[ ]:
-
-
-def lbfgs_fun(p, a, original_params):
-    # p_proj = projector(p, original_params)
-    return loss_function(p, a, yLEPs, yLEP_errs, original_params)
-
-
-def _get_lbfgs(maxiter=2500, tol=1e-6, history_size=50):
-    return jaxopt.LBFGS(
-        fun=lbfgs_fun,
-        value_and_grad=False,
-        maxiter=maxiter,
-        tol=tol,
-        linesearch="zoom",
-        maxls=125,
-        history_size=history_size,
-        jit=True,   
-    )
+# In[15]:
 
 
 @partial(jax.jit, static_argnames=("epochs", "n_alphas", "lr","wd","bogo_epochs","population" ), donate_argnums=(0,1))
@@ -1376,7 +1178,7 @@ def scan_alphas(params0, key, alpha_begin, d_alpha, n_alphas, original_params, e
     P = flattened_params0.shape[0]
 
     # Set up the LBFGS solver for refining
-    solver = _get_lbfgs(2500, 1e-10, 500)
+    solver = _get_lbfgs(2500, 1e-8, 250)
 
     # Define the body function of the scan to train for one alpha
     def body(carry, i):
@@ -1436,36 +1238,37 @@ def scan_alphas(params0, key, alpha_begin, d_alpha, n_alphas, original_params, e
 # In[ ]:
 
 
-mis = [2, 3,]
+mis = [1, 2, 3,]
 bogoscales = [2, ]
+
+n_passes = 1
 
 for mi in mis:
 
 
-    alphas = jnp.linspace(0.055, 0.175, 251)
+    alphas = jnp.linspace(0.075, 0.175, 401)
     d_alpha = alphas[1] - alphas[0]
     original_params = copy.deepcopy(params_array[mi-1])
 
-    solver = _get_lbfgs(15000, 1e-8, 1000)
+    solver = _get_lbfgs(5000, 1e-10, 1000)
 
     # Run the solver once
     new_params = copy.deepcopy(params_array[mi-1])
-    # new_params, _ = solver.run(params_array[mi-1], alphas[0], original_params)
 
 
 
     loss, new_params, losses, params_log = train(alphas[0],
                                                  new_params,
-                                                 250000*4 // 100, 
+                                                 250000*4 , 
                                                  lr, 
                                                  jax_key, 
                                                  verbose=True, 
-                                                 verbose_epochs=50000, 
+                                                 verbose_epochs=250000, 
                                                  bogo_init=True, 
                                                  early_stopping=250000*2, 
                                                  bogo_scale= 1, 
                                                  population=1024,
-                                                 bogo_epochs=1000 // 100)
+                                                 bogo_epochs=5000)
 
 
     print("Params after initial training:")
@@ -1474,10 +1277,10 @@ for mi in mis:
     print(loss_function(new_params,  alphas[0], yLEPs, yLEP_errs, original_params))
 
 
-    # # new_last = pack_last_order(new_params)
+    # new_last = pack_last_order(new_params)
     new_params = jax.tree_map(lambda x: jnp.asarray(x), new_params)
     new_params, _ = solver.run(new_params, alphas[0], original_params)
-    # # new_params = unpack_into_params((new_last), original_params)
+    # new_params = unpack_into_params((new_last), original_params)
 
 
     print("Params after solver:")
@@ -1486,9 +1289,11 @@ for mi in mis:
     print("Loss after solver:")
     print(loss_function(new_params,  alphas[0], yLEPs, yLEP_errs, original_params))
 
-    ls = []
-    ps = []
-    as_ = []
+    # global accumulators across all passes (forward + backward)
+    f_as_total, f_ls_total, f_ps_total = [], [], []
+    b_as_total, b_ls_total, b_ps_total = [], [], []
+
+
     params = copy.deepcopy(new_params)
 
 
@@ -1496,144 +1301,161 @@ for mi in mis:
     start_time = time()
 
     chunk_size = 50
-    for c in range(0, len(alphas), chunk_size):
-
-        alphas_chunk = alphas[c:min(c+chunk_size, len(alphas))]
-        print(f"Starting chunk {alphas_chunk[0]} to {alphas_chunk[-1]} for order {mi}")
-
-        # Skip hanging alphas to avoid triggering recompile
-        if len(alphas_chunk) < chunk_size:
-            continue
-
-        as32 = lambda x: jnp.asarray(x, jnp.float32)
-        params, jax_key, loss_vec, flats = scan_alphas(
-                                                        params,
-                                                        jax_key, 
-                                                        alpha_begin=as32(alphas_chunk[0]), 
-                                                        d_alpha=as32(d_alpha), 
-                                                        n_alphas=len(alphas_chunk),
-                                                        original_params=original_params,
-                                                        epochs=25000*2,
-                                                        lr=float(lr),
-                                                        wd=float(weight_decay),
-                                                        bogo_epochs=1000,  
-                                                        bogo_scale=as32(1/32) * mi,
-                                                        population=128
-                                                    )
-
-        as_ += alphas_chunk.tolist()
-        ls += loss_vec.tolist()
-        ps += [copy.deepcopy(params) for _ in alphas_chunk]
 
 
 
-        print(f"alpha: {alphas_chunk[-1]} loss: {ls[-1]}, Change in loss: {ls[-1] - ls[-len(alphas_chunk)]}")
-        print(f"Time for chunk: {time() - start_time} seconds")
-        start_time = time()
+    for pass_idx in range(n_passes):
+
+        ls, ps, as_ = [], [], []
 
 
-        fig, ax = newplot("column")
+        for c in range(0, len(alphas), chunk_size):
 
-        min_ys = np.min(ls)
-        plt.errorbar(as_, 2*np.array(ls- min_ys), color = order_colors[mi], fmt = "x")
+            alphas_chunk = alphas[c:min(c+chunk_size, len(alphas))]
+            print(f"Starting chunk {alphas_chunk[0]} to {alphas_chunk[-1]} for order {mi}")
 
-        argmin = np.argmin(ls)
-        best_alpha = as_[argmin]
+            # Skip hanging alphas to avoid triggering recompile
+            if len(alphas_chunk) < chunk_size:
+                continue
 
-        plt.axhline(1)
-        plt.yscale("log")
-        plt.xlabel(r"$\alpha_s$")
-        plt.ylabel(r"-2$\Delta L$")
-        plt.axvline(best_alpha)
-        plt.show()
+            as32 = lambda x: jnp.asarray(x, jnp.float32)
+            params, jax_key, loss_vec, flats = scan_alphas(
+                                                            params,
+                                                            jax_key, 
+                                                            alpha_begin=as32(alphas_chunk[0]), 
+                                                            d_alpha=as32(d_alpha), 
+                                                            n_alphas=len(alphas_chunk),
+                                                            original_params=original_params,
+                                                            epochs=25000*2,
+                                                            lr=float(lr),
+                                                            wd=float(weight_decay),
+                                                            bogo_epochs=100*5,  
+                                                            bogo_scale=as32(1/32)*mi,
+                                                            population=32
+                                                        )
 
+            as_ += alphas_chunk.tolist()
+            ls += loss_vec.tolist()
+            ps += [copy.deepcopy(params) for _ in alphas_chunk]
 
-
-        with open(f"output_JAX/alphas_{mi}_{n}_{tag}.pkl", "wb") as f:
-            pickle.dump(as_, f)
-
-        with open(f"output_JAX/ls_{mi}_{n}_{tag}.pkl", "wb") as f:
-            pickle.dump(ls, f)    
-
-        with open(f"output_JAX/params_{mi}_{n}_{tag}.pkl", "wb") as f:
-            pickle.dump(ps, f)
-
-        print("Saved intermediate results")
-
-
-    # Run again, but backwards
-    ls_backwards = []
-    ps_backwards = []
-    as_backwards = []
-
-    alphas_backwards = alphas[::-1]
+            f_as_total += alphas_chunk.tolist()
+            f_ls_total += loss_vec.tolist()
+            f_ps_total += [copy.deepcopy(params) for _ in alphas_chunk]
 
 
-    for c in range(0, len(alphas_backwards), chunk_size):
-
-        alphas_chunk = alphas_backwards[c:min(c+chunk_size, len(alphas_backwards))]
-        print(f"Starting chunk {alphas_chunk[0]} to {alphas_chunk[-1]} for order {mi}")
-
-        # Skip hanging alphas to avoid triggering recompile
-        if len(alphas_chunk) < chunk_size:
-            continue
-
-        as32 = lambda x: jnp.asarray(x, jnp.float32)
-        params, jax_key, loss_vec, flats = scan_alphas(
-                                                        params,
-                                                        jax_key, 
-                                                        alpha_begin=as32(alphas_chunk[0]), 
-                                                        d_alpha=as32(-d_alpha), 
-                                                        n_alphas=len(alphas_chunk),
-                                                        original_params=original_params,
-                                                        epochs=25000*2,
-                                                        lr=float(lr),
-                                                        wd=float(weight_decay),
-                                                        bogo_epochs=1000,  
-                                                        bogo_scale=as32(1/32) * mi,
-                                                        population=128
-                                                    )
+            print(f"alpha: {alphas_chunk[-1]} loss: {ls[-1]}, Change in loss: {ls[-1] - ls[-len(alphas_chunk)]}")
+            print(f"Time for chunk: {time() - start_time} seconds")
+            start_time = time()
 
 
-        as_backwards += alphas_chunk.tolist()
-        ls_backwards += loss_vec.tolist()
-        ps_backwards += [copy.deepcopy(params) for _ in alphas_chunk]
+            fig, ax = newplot("column")
+
+            all_losses = f_ls_total + b_ls_total
+            min_ys = np.min(all_losses) if len(all_losses) else np.min(ls)
+            # forward in one color, backward in another
+            if len(f_ls_total):
+                plt.errorbar(f_as_total, 2*np.array(np.array(f_ls_total) - min_ys), color = order_colors[mi], fmt = "x")
+            if len(b_ls_total):
+                plt.errorbar(b_as_total, 2*np.array(np.array(b_ls_total) - min_ys), color = darkcolors[mi-1], fmt = "o")
+
+            argmin = np.argmin(all_losses) if len(all_losses) else np.argmin(ls)
+            best_alpha = (f_as_total + b_as_total)[argmin] if len(all_losses) else as_[argmin]
 
 
-        print(f"alpha: {alphas_chunk[-1]} loss: {ls_backwards[-1]}, Change in loss: {ls_backwards[-1] - ls_backwards[-len(alphas_chunk)]}")
-        print(f"Time for chunk: {time() - start_time} seconds")
-        start_time = time()
+
+            plt.axhline(1)
+            plt.yscale("log")
+            plt.xlabel(r"$\alpha_s$")
+            plt.ylabel(r"-2$\Delta L$")
+            plt.axvline(best_alpha)
+            plt.show()
 
 
-        fig, ax = newplot("column")
 
-        all_losses = ls + ls_backwards
-        min_ys = np.min(all_losses)
-        plt.errorbar(as_, 2*np.array(ls- min_ys), color = order_colors[mi], fmt = "x")
-        plt.errorbar(as_backwards, 2*np.array(ls_backwards- min_ys), color = darkcolors[mi-1], fmt = "o")
+            with open(f"output_JAX/alphas_{mi}_{n}_{tag}.pkl", "wb") as f:
+                pickle.dump(f_as_total + b_as_total, f)
 
-        argmin = np.argmin(all_losses)
-        best_alpha = (as_ + as_backwards)[argmin]
+            with open(f"output_JAX/ls_{mi}_{n}_{tag}.pkl", "wb") as f:
+                pickle.dump(f_ls_total + b_ls_total, f)    
 
-        plt.axhline(1)
-        plt.yscale("log")
-        plt.xlabel(r"$\alpha_s$")
-        plt.ylabel(r"-2$\Delta L$")
-        plt.axvline(best_alpha)
-        plt.show()
+            with open(f"output_JAX/params_{mi}_{n}_{tag}.pkl", "wb") as f:
+                pickle.dump(f_ps_total + b_ps_total, f)
 
-        with open(f"output_JAX/alphas_{mi}_{n}_{tag}.pkl", "wb") as f:
-            pickle.dump(as_ + as_backwards, f)
-
-        with open(f"output_JAX/ls_{mi}_{n}_{tag}.pkl", "wb") as f:
-            pickle.dump(ls + ls_backwards, f)    
-
-        with open(f"output_JAX/params_{mi}_{n}_{tag}.pkl", "wb") as f:
-            pickle.dump(ps + ps_backwards, f)
-
-        print("Saved intermediate results")
+            print("Saved intermediate results")
 
 
+        # Run again, but backwards
+        ls_backwards, ps_backwards, as_backwards = [], [], []
+        alphas_backwards = alphas[::-1]
+
+        for c in range(0, len(alphas_backwards), chunk_size):
+
+            alphas_chunk = alphas_backwards[c:min(c+chunk_size, len(alphas_backwards))]
+            print(f"Starting chunk {alphas_chunk[0]} to {alphas_chunk[-1]} for order {mi}")
+
+            # Skip hanging alphas to avoid triggering recompile
+            if len(alphas_chunk) < chunk_size:
+                continue
+
+            as32 = lambda x: jnp.asarray(x, jnp.float32)
+            params, jax_key, loss_vec, flats = scan_alphas(
+                                                            params,
+                                                            jax_key, 
+                                                            alpha_begin=as32(alphas_chunk[0]), 
+                                                            d_alpha=as32(-d_alpha), 
+                                                            n_alphas=len(alphas_chunk),
+                                                            original_params=original_params,
+                                                            epochs=25000*2,
+                                                            lr=float(lr),
+                                                            wd=float(weight_decay),
+                                                            bogo_epochs=100*5,  
+                                                            bogo_scale=as32(1/32)*mi,
+                                                            population=32
+                                                        )
+
+            as_backwards += alphas_chunk.tolist()
+            ls_backwards += loss_vec.tolist()
+            ps_backwards += [copy.deepcopy(params) for _ in alphas_chunk]
+
+            # accumulate totals
+            b_as_total += alphas_chunk.tolist()
+            b_ls_total += loss_vec.tolist()
+            b_ps_total += [copy.deepcopy(params) for _ in alphas_chunk]
+
+            print(f"alpha: {alphas_chunk[-1]} loss: {ls_backwards[-1]}, Change in loss: {ls_backwards[-1] - ls_backwards[-len(alphas_chunk)]}")
+            print(f"Time for chunk: {time() - start_time} seconds")
+            start_time = time()
+
+            fig, ax = newplot("column")
+
+            all_losses = f_ls_total + b_ls_total
+            min_ys = np.min(all_losses)
+            # forward in one color, backward in another
+            if len(f_ls_total):
+                plt.errorbar(f_as_total, 2*np.array(np.array(f_ls_total) - min_ys), color = order_colors[mi], fmt = "x")
+            if len(b_ls_total):
+                plt.errorbar(b_as_total, 2*np.array(np.array(b_ls_total) - min_ys), color = darkcolors[mi-1], fmt = "o")
+
+            argmin = np.argmin(all_losses)
+            best_alpha = (f_as_total + b_as_total)[argmin]
+
+            plt.axhline(1)
+            plt.yscale("log")
+            plt.xlabel(r"$\alpha_s$")
+            plt.ylabel(r"-2$\Delta L$")
+            plt.axvline(best_alpha)
+            plt.show()
+
+            with open(f"output_JAX/alphas_{mi}_{n}_{tag}.pkl", "wb") as f:
+                pickle.dump(f_as_total + b_as_total, f)
+
+            with open(f"output_JAX/ls_{mi}_{n}_{tag}.pkl", "wb") as f:
+                pickle.dump(f_ls_total + b_ls_total, f)    
+
+            with open(f"output_JAX/params_{mi}_{n}_{tag}.pkl", "wb") as f:
+                pickle.dump(f_ps_total + b_ps_total, f)
+
+            print("Saved intermediate results")
 
     with open(f"output_JAX/alphas_{mi}_{n}_{tag}.pkl", "wb") as f:
             pickle.dump(as_ + as_backwards, f)
@@ -1645,6 +1467,12 @@ for mi in mis:
         pickle.dump(ps + ps_backwards, f)
 
     print("Saved final results")
+
+
+# In[ ]:
+
+
+
 
 
 # In[ ]:
