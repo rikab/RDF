@@ -1,4 +1,5 @@
 # Resummed Distribution Functions (v1.0.0)
+### By Rikab Gambhir and Radha Mastandrea
 
 [![GitHub Project](https://img.shields.io/badge/GitHub--blue?style=social&logo=GitHub)](https://github.com/rikab/RDF)
 
