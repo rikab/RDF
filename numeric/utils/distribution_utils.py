@@ -7,8 +7,8 @@ from utils.function_utils import polynomial, ReLU, relu_polynomial
 
 
 eps = 1e-16
-T_MAX = 5
-N_GRID = 64
+T_MAX = 10
+N_GRID = 100
 
 TINY = 1e-30
 MAX_EXP = 60.0
@@ -134,6 +134,16 @@ def q(t, alpha, g_star, g_mn, thetas, thetas_coeffs, temps, temps_coeffs, temps_
     return f(t, alpha, g_star, g_mn, thetas, thetas_coeffs, temps, temps_coeffs, temps_relu) * jnp.exp(-integral)
 
 
+@jax.jit
+def cdf(t, alpha, g_star, g_mn, thetas, thetas_coeffs, temps, temps_coeffs, temps_relu):
+    t_dense, f_vals, df_vals, F_dense = _build_integral_cache(
+        alpha, g_star, g_mn, thetas, thetas_coeffs, temps, temps_coeffs, temps_relu
+    )
+    integral = _integral_from_cache(t, t_dense, f_vals, df_vals, F_dense)
+    return 1 -  jnp.exp(-integral)
+
+
+
 def build_q_mstar(mstar):
 
     def q_mstar(t, alpha, g_star, g_mn, thetas, thetas_coeffs, temps, temps_coeffs, temps_relu):
@@ -166,6 +176,39 @@ def build_q_mstar(mstar):
         return q(t, alpha, new_g_star, new_g_mn, new_thetas, new_thetas_c, new_temps, new_temps_c, new_temps_r)
     
     return q_mstar
+
+def build_cdf_mstar(mstar):
+
+    def cdf_mstar(t, alpha, g_star, g_mn, thetas, thetas_coeffs, temps, temps_coeffs, temps_relu):
+
+        M, N = g_star.shape
+
+        new_M = M + mstar
+
+        g_star_0s = jnp.zeros((mstar, N))
+        new_g_star = jnp.vstack((g_star_0s, g_star))
+
+        g_mn_0s =  jnp.zeros((mstar, N))
+        new_g_mn = jnp.vstack((g_mn_0s, g_mn))
+
+        theta_0s = jnp.zeros((mstar))
+        new_thetas = jnp.concatenate((theta_0s, thetas))
+
+        theta_c_0s = jnp.zeros((mstar))
+        new_thetas_c = jnp.concatenate((theta_c_0s, thetas_coeffs))
+
+        temp_0s = jnp.zeros(mstar)
+        new_temps = jnp.concatenate((temp_0s, temps))
+
+        temp_c_0s = jnp.zeros(mstar)
+        new_temps_c = jnp.concatenate((temp_c_0s, temps_coeffs))
+
+        temp_r_0s = jnp.zeros(mstar)
+        new_temps_r = jnp.concatenate((temp_r_0s, temps_relu))
+
+        return cdf(t, alpha, new_g_star, new_g_mn, new_thetas, new_thetas_c, new_temps, new_temps_c, new_temps_r)
+    
+    return cdf_mstar
 
 
 

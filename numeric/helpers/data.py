@@ -210,6 +210,9 @@ def get_pdf_toy_JAX(alpha, example, tt, order):
             y = (alpha * tt) * 0 + alpha
         elif order == 2:
             y = alpha * (1 - alpha * tt)
+        elif order == 3:
+            y = alpha * (1 - alpha * tt + (alpha * tt)**2 /2 )
+
             
     elif example == "rayleigh":
         if order == -1:
@@ -218,6 +221,8 @@ def get_pdf_toy_JAX(alpha, example, tt, order):
             y = alpha * tt
         elif order == 2:
             y = alpha * tt * (1 - alpha * tt**2 / 2)
+        elif order == 3:
+            y = alpha * tt * (1 - alpha * tt**2 / 2 + (alpha * tt**2 / 2)**2 /2)
 
             
     elif example == "harder_exp":
