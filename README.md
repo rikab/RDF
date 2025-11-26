@@ -5,7 +5,7 @@
 
 `Resummed Distribution Functions` (RDFs) are a framework for performing all-orders extensions of a fixed order calculation to be consistent with unitarity, and for performing statistical fits, as defined in ["Resummed Distribution Functions: Making Perturbation Theory Positive and Normalized" (arxiv:25XX.XXXXX)](https://arxiv.org/abs/25XX.XXXXX). This was used to perform all the analyses shown in this paper, and can be used to perform similar analyses.
 
-![thumbnail](https://user-images.githubusercontent.com/78619093/221254441-36b3bcc4-65fc-4211-aaef-2332c5dd893e.gif)
+![thumbnail](https://github.com/rikab/RDF/blob/main/thumbnail.pdf)
 
 Pictured: Example of using the RDF to match to finite Taylor expansions of the exponential distribution. While any fixed-order expansion is never a true distribution, every RDF matching is.
 
