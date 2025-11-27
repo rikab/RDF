@@ -14,7 +14,7 @@ This repo contains::
 - "Analytic" RDFs, which can be used to perform matching to a known closed-form calculation.
 - "Numeric" RDFs, which can be used to perform matching to a numeric fixed-order calculation (such as those performed by MadGraph or EERAD3), and seperately, for fitting the full RDF to data with nuisance parameters.
 
-Files containing fixed-order calculations for thrust generated ussing EERAD3 up to $\alpha_s^3$ may be found in `numeric/data`. This is then used to perform matching with `numeric/data/match`, and then the matched calculations can be fit to data following `numeric/fit`. We also save our final RDF parameters for all the studies performed in [(arxiv:25XX.XXXXX)](https://arxiv.org/abs/25XX.XXXXX) in `numeric/output_JAX`.
+Files containing fixed-order calculations for thrust and c-parameter generated ussing EERAD3 up to $\alpha_s^3$ may be found in `numeric/data`. This is then used to perform matching with `numeric/data/match`, and then the matched calculations can be fit to data following `numeric/fit`. We also save our final RDF parameters for all the studies performed in [(arxiv:25XX.XXXXX)](https://arxiv.org/abs/25XX.XXXXX) in `numeric/output_JAX`.
 
 
 ## Dependencies
