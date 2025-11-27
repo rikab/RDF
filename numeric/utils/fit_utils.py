@@ -3,36 +3,49 @@ import jax.numpy as jnp
 from functools import partial
 
 
-
 @partial(jax.jit, static_argnames=['m0', 'mstar'])
-def randomize_params(params, scale=0.1, key=None, m0 = 1, mstar=1):
-
-
-    k1,k2,k3,k4,k5,k6,k7 = jax.random.split(key, 7)
-
-    shape_m, shape_n = params["g_star"].shape
+def randomize_params(params, scale=0.1, key=None, m0=1, mstar=1):
 
     
-    g_star = params["g_star"].at[-m0:, :].add(scale  * jax.random.normal(k1, (m0, shape_n)))
-    g_coeffs = params["g_coeffs"].at[-m0-mstar:-mstar, :].add(scale  * jax.random.normal(k2, (m0, shape_n)))
+    k1,k2,k3,k4,k5,k6,k7 = jax.random.split(key, 7)
+    shape_m, shape_n = params["g_star"].shape
 
-    thetas = params["thetas"].at[-m0:].add(scale * jax.random.normal(k3, (m0,)))
+    def _rms(x): return jnp.sqrt(jnp.mean(x*x) + 1e-8)
+
+    gs_ref   = params["g_star"][-m0:, :]
+    gc_ref   = params["g_coeffs"][-m0-mstar:-mstar, :]
+    th_ref   = params["thetas"][-m0:]
+    thc_ref  = params["thetas_coeffs"][-m0-mstar:-mstar]
+    bt_ref   = params["temps"][-m0:]
+    btc_ref  = params["temps_coeffs"][-m0-mstar:-mstar]
+    btp_ref  = params["temps_positive"][-m0:]
+
+    gs_s  = scale #* _rms(gs_ref)
+    gc_s  = scale #* _rms(gc_ref)
+    th_s  = scale #* _rms(th_ref)
+    thc_s = scale #* _rms(thc_ref)
+    bt_s  = scale #* _rms(bt_ref)
+    btc_s = scale #* _rms(btc_ref)
+    btp_s = scale #* _rms(btp_ref)
+
+    g_star    = params["g_star"].at[-m0:, :].add(gs_s  * jax.random.normal(k1, (m0, shape_n)))
+    g_coeffs  = params["g_coeffs"].at[-m0-mstar:-mstar, :].add(gc_s * jax.random.normal(k2, (m0, shape_n)))
+
+    thetas = params["thetas"].at[-m0:].add(th_s * jax.random.normal(k3, (m0,)))
     thetas = params["thetas"].at[-m0:].set(jnp.minimum(thetas[-1], thetas[-2]))
     thetas = params["thetas"].at[-m0:].set(jnp.maximum(thetas[-m0:], -1))
-    thetas_coeffs = params["thetas_coeffs"].at[-m0-mstar:-mstar].add(scale * jax.random.normal(k4, (m0,)))
+
+    thetas_coeffs = params["thetas_coeffs"].at[-m0-mstar:-mstar].add(thc_s * jax.random.normal(k4, (m0,)))
     thetas_coeffs = params["thetas_coeffs"].at[-m0-mstar:-mstar].set(jnp.minimum(thetas_coeffs[-1-mstar], thetas_coeffs[-1-mstar-1]))
     thetas_coeffs = params["thetas_coeffs"].at[-m0-mstar:-mstar].set(jnp.maximum(thetas_coeffs[-m0-mstar:-mstar], -1))
 
-    temps = (params["temps"].at[-m0:].add(scale * jax.random.normal(k5, (m0,))))
-    temps_coeffs = (params["temps_coeffs"].at[-m0-mstar:-mstar].add(scale * jax.random.normal(k6, (m0,))))
-    temps_positive = (params["temps_positive"].at[-m0:].add(scale  * jax.random.normal(k7, (m0,))))
+    temps           = params["temps"].at[-m0:].add(bt_s   * jax.random.normal(k5, (m0,)))
+    temps_coeffs    = params["temps_coeffs"].at[-m0-mstar:-mstar].add(btc_s * jax.random.normal(k6, (m0,)))
+    temps_positive  = params["temps_positive"].at[-m0:].add(btp_s * jax.random.normal(k7, (m0,)))
 
-
-    return {
-      **params, "g_star": g_star, "g_coeffs": g_coeffs, "thetas": thetas,
-      "thetas_coeffs": thetas_coeffs, "temps": temps,
-      "temps_coeffs": temps_coeffs, "temps_positive": temps_positive
-    }
+    return {**params, "g_star": g_star, "g_coeffs": g_coeffs, "thetas": thetas,
+            "thetas_coeffs": thetas_coeffs, "temps": temps,
+            "temps_coeffs": temps_coeffs, "temps_positive": temps_positive}
 
 
 
