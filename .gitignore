@@ -5,6 +5,7 @@ radha_outputs/*
 *.yml
 *.png
 *_model
+analytic/plots/*
 numeric/plots/*
 numeric/output/*
 numeric/figures/*
