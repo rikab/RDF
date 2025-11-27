@@ -3,6 +3,8 @@ import torch
 import pickle
 import jax.numpy as jnp
 
+from helpers.ansatz import helper_theta
+
 
 N_C = 3
 N_F = 5
@@ -42,13 +44,20 @@ def get_pdf_toy(alpha, example, tt, order, device):
             y = alpha.expand_as(alpha * tt) * 0 + alpha
         elif order == 2:
             y = alpha * (1 - alpha * tt)
-    elif example == "angularity":
+        elif order == 3:
+            y = alpha * (1 - alpha * tt + 0.5*alpha**2 * tt**2)
+            
+    elif example == "rayleigh":
         if order == -1:
             y = alpha * tt * torch.exp(-alpha * tt**2 / 2)
         elif order == 1:
             y = alpha * tt
         elif order == 2:
             y = alpha * tt * (1 - alpha * tt**2 / 2)
+        elif order == 3:
+            y = alpha * tt * (1 - alpha * tt**2 / 2 + (1.0/8.0)*alpha**2 * tt**4 )
+
+            
     elif example == "harder_exp":
         if order == 1:
             y = alpha.expand_as(alpha * tt) * 0 + alpha
@@ -56,6 +65,15 @@ def get_pdf_toy(alpha, example, tt, order, device):
             y = alpha * (1 - alpha * tt)
         elif order == -1:
             y = (alpha + 2*alpha**2*tt) * torch.exp(-alpha*tt - alpha**2 *tt**2)
+
+
+    elif example == "theta_toy":
+        if order == 1:
+            y = alpha * helper_theta(tt, 0.5)
+        elif order == 2:
+            y = alpha * helper_theta(tt, 0.5) - alpha**2 *(tt  *helper_theta(tt, 0.25) + (tt-0.5) * helper_theta(tt, 0.5))
+        elif order == -1:
+            y = alpha * helper_theta(tt, 0.5) - alpha**2 *(tt  *helper_theta(tt, 0.25) + (tt-0.5) * helper_theta(tt, 0.5))
 
         
     elif example == "LO_thrust":
@@ -165,15 +183,70 @@ def read_in_data(distribution, order, device, space="t"):
             y_err = np.sqrt(loc_data_dict[alpha][f"mcerr_{order_key}"] ** 2 + scale_err ** 2)
             y_err = torch.tensor(y_err, device=device).reshape(-1, 1)
 
-            data_dict[float(alpha)*1e-3] = y_data, y_err
 
             bin_centers = torch.tensor(loc_data_dict[alpha]["bin_centers"], device=device).reshape(-1, )
-            bin_edges = np.concatenate([loc_data_dict[alpha]["bin_lows"], loc_data_dict[alpha]["bin_highs"][-1].reshape(-1,)])
+            bin_edges = np.concatenate([loc_data_dict[alpha]["bin_lows"][bin_centers > 0], loc_data_dict[alpha]["bin_highs"][-1].reshape(-1,)])
             bin_edges = torch.tensor(bin_edges, device=device).reshape(-1, )
+
+
+            y_data = y_data[bin_centers > 0]
+            y_err = y_err[bin_centers > 0]
+            bin_centers = bin_centers[bin_centers > 0]
+
+
+            data_dict[float(alpha)*1e-3] = y_data, y_err
+
 
 
     return data_dict, bin_edges, bin_centers
 
+
+
+
+
+
+def get_pdf_toy_JAX(alpha, example, tt, order):
+
+    if example == "exponential":
+        if order == -1:
+            y = alpha * jnp.exp(-alpha * tt)
+        elif order == 1:
+            y = (alpha * tt) * 0 + alpha
+        elif order == 2:
+            y = alpha * (1 - alpha * tt)
+        elif order == 3:
+            y = alpha * (1 - alpha * tt + 0.5*alpha**2 * tt**2)
+            
+    elif example == "rayleigh":
+        if order == -1:
+            y = alpha * tt * jnp.exp(-alpha * tt**2 / 2)
+        elif order == 1:
+            y = alpha * tt
+        elif order == 2:
+            y = alpha * tt * (1 - alpha * tt**2 / 2)
+        elif order == 3:
+            y = alpha * tt * (1 - alpha * tt**2 / 2 + (1.0/8.0)*alpha**2 * tt**4 )
+
+            
+    elif example == "harder_exp":
+        if order == 1:
+            y = (alpha * tt) * 0 + alpha
+        elif order == 2:
+            y = alpha * (1 - alpha * tt)
+        elif order == -1:
+            y = (alpha + 2*alpha**2*tt) * jnp.exp(-alpha*tt - alpha**2 *tt**2)
+
+
+    elif example == "theta_toy":
+        if order == 1:
+            y = alpha * helper_theta(tt, 0.5)
+        elif order == 2:
+            y = alpha * helper_theta(tt, 0.5) - alpha**2 *(tt  *helper_theta(tt, 0.25) + (tt-0.5) * helper_theta(tt, 0.5))
+        elif order == -1:
+            y = alpha * helper_theta(tt, 0.5) - alpha**2 *(tt  *helper_theta(tt, 0.25) + (tt-0.5) * helper_theta(tt, 0.5))
+
+
+    return y
 
 def read_in_data_JAX(distribution, order):
 
@@ -181,6 +254,8 @@ def read_in_data_JAX(distribution, order):
         order_key = "LO"
     elif order == 2:
         order_key = "NLO"
+    elif order == 3:
+        order_key = "NNLO"
 
     if distribution == "thrust":
         path_to_data = "data/thrust_data.pkl"
@@ -189,21 +264,37 @@ def read_in_data_JAX(distribution, order):
         
     data_dict = {}
 
+
     with open(path_to_data, "rb") as ifile:
         loc_data_dict = pickle.load(ifile)
+
+        min_value = -1
+
         for alpha in loc_data_dict.keys():
 
             y_data = loc_data_dict[alpha][f"values_{order_key}"]
             y_data = jnp.array(y_data).reshape(-1, 1)
 
             y_err = loc_data_dict[alpha][f"mcerr_{order_key}"]
+
+            # get the max of scale variations
+            scale_err = np.maximum(loc_data_dict[alpha][f"errplus_{order_key}"], loc_data_dict[alpha][f"errminus_{order_key}"])
+
+            # add in quadrature
+            y_err = np.sqrt(loc_data_dict[alpha][f"mcerr_{order_key}"] ** 2 + scale_err ** 2)
             y_err = jnp.array(y_err).reshape(-1, 1)
+
+
+            bin_centers = jnp.array(loc_data_dict[alpha]["bin_centers"]).reshape(-1, )
+            bin_edges = jnp.concatenate([loc_data_dict[alpha]["bin_lows"][bin_centers > min_value], loc_data_dict[alpha]["bin_highs"][-1].reshape(-1,)])
+            bin_edges = jnp.array(bin_edges).reshape(-1, )
+
+            y_data = y_data[bin_centers > min_value]
+            y_err = y_err[bin_centers > min_value]
+            bin_centers = bin_centers[bin_centers > min_value]
 
             data_dict[float(alpha)*1e-3] = y_data, y_err
 
-            bin_centers = jnp.array(loc_data_dict[alpha]["bin_centers"]).reshape(-1, )
-            bin_edges = jnp.concatenate([loc_data_dict[alpha]["bin_lows"], loc_data_dict[alpha]["bin_highs"][-1].reshape(-1,)])
-            bin_edges = jnp.array(bin_edges).reshape(-1, )
 
 
     return data_dict, bin_edges, bin_centers
