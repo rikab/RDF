@@ -10,3 +10,5 @@ numeric/plots/*
 numeric/output/*
 numeric/figures/*
 numeric/helpers/__pycache__/*
+
+!numeric/output_fits/*.pkl
