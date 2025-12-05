@@ -14,7 +14,7 @@ This repo contains::
 - "Analytic" RDFs, which can be used to perform matching to a known closed-form calculation.
 - "Numeric" RDFs, which can be used to perform matching to a numeric fixed-order calculation (such as those performed by MadGraph or EERAD3), and seperately, for fitting the full RDF to data with nuisance parameters.
 
-Files containing fixed-order calculations for thrust and c-parameter generated ussing EERAD3 up to $\alpha_s^3$ may be found in `numeric/data`. This is then used to perform matching with `numeric/data/match`, and then the matched calculations can be fit to data following `numeric/fit`. We also save our final RDF parameters for all the studies performed in [(arxiv:25XX.XXXXX)](https://arxiv.org/abs/25XX.XXXXX) in `numeric/output_JAX` (for matching) and `numeric/output_fits` (for fitting).
+Files containing fixed-order calculations for thrust and c-parameter generated ussing EERAD3 up to $\alpha_s^3$ may be found in `numeric/data`. This is then used to perform matching with `numeric/data/match`, and then the matched calculations can be fit to data following `numeric/fit`. We also save our final RDF parameters for all the studies performed in [(arxiv:2512.04160)](https://arxiv.org/abs/2512.04160) in `numeric/output_JAX` (for matching) and `numeric/output_fits` (for fitting).
 
 We provide the full set of post-numeric matching files for the exponential, Rayleigh, and thrust distributions in [an accompanying Zenodo](https://zenodo.org/records/17743471). These files contain the full lost and parameter histories, as well as the best-fit parameters, for orders 1, 2, and 3 in $\alpha$. (The Zenodo was necessary since some of these histories were quite large and could not be uploaded to this GitHub.)
 
@@ -33,16 +33,16 @@ pip install --upgrade jax jaxlib==0.1.69+cuda111 -f https://storage.googleapis.c
 
 ## Citation
 
-If you use this repo, please cite the corresponding paper, ["Resummed Distribution Functions: Making Perturbation Theory Positive and Normalized" (arxiv:25XX.XXXXX)](https://arxiv.org/abs/25XX.XXXXX):
+If you use this repo, please cite the corresponding paper, ["Resummed Distribution Functions: Making Perturbation Theory Positive and Normalized" (arxiv:25XX.04610)](https://arxiv.org/abs/2512.04610):
 
 TODO: ADD WHEN PAPER IS OUT.
 
 
 ## Changelog
 
-- v1.0.0: XX XXXXX 2025. Official Release.
+- v1.0.0: 04 December 2025. Official Release.
 
 
-Based on the work in ["Resummed Distribution Functions: Making Perturbation Theory Positive and Normalized" (arxiv:25XX.XXXXX)](https://arxiv.org/abs/25XX.XXXXX)
+Based on the work in ["Resummed Distribution Functions: Making Perturbation Theory Positive and Normalized" (arxiv:2512.04610)](https://arxiv.org/abs/2512.04610)
 
 Bugs, Fixes, Ideas, or Questions? Contact us at gambhirb@ucmail.uc.edu and rmastand@uchicago.edu
