@@ -35,8 +35,17 @@ pip install --upgrade jax jaxlib==0.1.69+cuda111 -f https://storage.googleapis.c
 
 If you use this repo, please cite the corresponding paper, ["Resummed Distribution Functions: Making Perturbation Theory Positive and Normalized" (arxiv:25XX.04610)](https://arxiv.org/abs/2512.04610):
 
-TODO: ADD WHEN PAPER IS OUT.
-
+```
+@misc{gambhir2025resummeddistributionfunctionsmaking,
+      title={Resummed Distribution Functions: Making Perturbation Theory Positive and Normalized}, 
+      author={Rikab Gambhir and Radha Mastandrea},
+      year={2025},
+      eprint={2512.04160},
+      archivePrefix={arXiv},
+      primaryClass={hep-ph},
+      url={https://arxiv.org/abs/2512.04160}, 
+}
+```
 
 ## Changelog
 
