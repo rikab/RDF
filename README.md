@@ -3,7 +3,7 @@
 
 [![GitHub Project](https://img.shields.io/badge/GitHub--blue?style=social&logo=GitHub)](https://github.com/rikab/RDF)
 
-`Resummed Distribution Functions` (RDFs) are a framework for performing all-orders extensions of a fixed order calculation to be consistent with unitarity, and for performing statistical fits, as defined in ["Resummed Distribution Functions: Making Perturbation Theory Positive and Normalized" (arxiv:25XX.XXXXX)](https://arxiv.org/abs/25XX.XXXXX). This was used to perform all the analyses shown in this paper, and can be used to perform similar analyses.
+`Resummed Distribution Functions` (RDFs) are a framework for performing all-orders extensions of a fixed order calculation to be consistent with unitarity, and for performing statistical fits, as defined in ["Resummed Distribution Functions: Making Perturbation Theory Positive and Normalized" (arxiv:2512.04160)](https://arxiv.org/abs/2512.04160). This was used to perform all the analyses shown in this paper, and can be used to perform similar analyses.
 
 ![thumbnail](https://github.com/rikab/RDF/blob/main/thumbnail.png)
 
